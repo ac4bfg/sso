@@ -41,8 +41,10 @@ jobs:
           echo "Cleaning up unused Docker images..."
           docker image prune -f
 
-          # Build and deploy with removal of orphans
-          echo "Building and starting containers..."
+          # Build and deploy with BuildKit enabled for caching
+          echo "Building and starting containers using BuildKit..."
+          export DOCKER_BUILDKIT=1
+          export COMPOSE_DOCKER_CLI_BUILD=1
           docker-compose up -d --build --remove-orphans
 
           # Verify deployment
