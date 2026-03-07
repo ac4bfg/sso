@@ -37,9 +37,9 @@ jobs:
               git pull origin main
           fi
 
-          # Proactive Cleanup to avoid "No space left on device"
-          echo "Cleaning up unused Docker resources..."
-          docker system prune -af
+          # Smart Cleanup: Preserve build cache, only remove dangling images
+          echo "Cleaning up unused Docker images..."
+          docker image prune -f
 
           # Build and deploy with removal of orphans
           echo "Building and starting containers..."
