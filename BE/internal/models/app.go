@@ -21,7 +21,17 @@ type App struct {
 
 func (a *App) BeforeCreate(tx *gorm.DB) error {
 	if a.ID == "" {
-		a.ID = uuid.New().String()
+		u, _ := uuid.NewRandom()
+		a.ID = u.String()
 	}
 	return nil
+}
+
+type AppWithRole struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Icon        string `json:"icon"`
+	BaseURL     string `json:"base_url"`
+	Role        string `json:"role"`
 }

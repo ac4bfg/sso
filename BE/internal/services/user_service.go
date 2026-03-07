@@ -62,9 +62,9 @@ func (s *UserService) GetByID(id string) (*models.UserResponse, error) {
 	return &resp, nil
 }
 
-// GetMyApps mengambil daftar aplikasi yang berhak diakses user
-func (s *UserService) GetMyApps(userID string) ([]models.App, error) {
-	apps, err := s.appRepo.FindAppsByUserID(userID)
+// GetMyApps mengambil daftar aplikasi yang berhak diakses user beserta rolenya
+func (s *UserService) GetMyApps(userID string) ([]models.AppWithRole, error) {
+	apps, err := s.appRepo.FindAppsWithRolesByUserID(userID)
 	if err != nil {
 		return nil, errors.New("failed to fetch user apps")
 	}
