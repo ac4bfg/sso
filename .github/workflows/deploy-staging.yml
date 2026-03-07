@@ -46,6 +46,12 @@ jobs:
           echo "Building and starting containers using BuildKit..."
           export DOCKER_BUILDKIT=1
           export COMPOSE_DOCKER_CLI_BUILD=1
+          export DB_HOST_PORT=5433
+          export REDIS_HOST_PORT=6380
+          export BE_HOST_PORT=8082
+          export FE_HOST_PORT=3002
+          export NEXT_PUBLIC_SSO_URL=http://202.155.157.59:3002
+          export NEXT_PUBLIC_API_URL=http://202.155.157.59:8082/api/v1
           docker compose up -d --build --remove-orphans
 
           # Verify deployment
