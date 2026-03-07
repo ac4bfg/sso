@@ -24,21 +24,29 @@ jobs:
           key: ${{ secrets.STAGING_VPS_SSH_KEY }}
           port: ${{ secrets.STAGING_VPS_PORT }} # Biasanya 22
           script: |
-            # Menggunakan folder staging sesuai standar user deploy
-            mkdir -p /home/deploy/apps/sso-staging
-            cd /home/deploy/apps/sso-staging
+            APP_DIR="/home/deploy/apps/sso-staging"
+            REPO_URL="https://github.com/ac4bfg/sso.git"
 
-            # Pastikan sedang di branch staging
-            git checkout staging
+            # 1. Cek folder staging
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "Folder Staging tidak ditemukan, melakukan clone..."
+              mkdir -p /home/deploy/apps
+              cd /home/deploy/apps
+              git clone -b staging $REPO_URL sso-staging
+              cd sso-staging
+            else
+              echo "Folder Staging ditemukan, melakukan pull..."
+              cd $APP_DIR
+              git fetch --all
+              git reset --hard origin/staging
+            fi
 
-            # Tarik kode terbaru dari GitHub branch staging
-            git pull origin staging
+            # 2. Disk Management
+            docker system prune -f
 
-            # Matikan container lama (opsional, tapi disarankan untuk fresh start)
-            docker-compose down
-
-            # Build ulang dan jalankan container yang baru
+            # 3. Restart
             docker-compose up -d --build
 
-            # Hapus image/container lama yang tidak terpakai untuk menghemat disk VPS
+            # 4. Cleanup
             docker image prune -f
+            echo "Staging Deployment berhasil!"

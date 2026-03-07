@@ -24,18 +24,31 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }} # Biasanya 22
           script: |
-            # Menggunakan folder sesuai standar user deploy
-            mkdir -p /home/deploy/apps/sso
-            cd /home/deploy/apps/sso
+            APP_DIR="/home/deploy/apps/sso"
+            REPO_URL="https://github.com/ac4bfg/sso.git"
 
-            # Tarik kode terbaru dari GitHub
-            git pull origin main
+            # 1. Cek apakah folder sudah ada dan merupakan repository git
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "Folder tidak ditemukan, melakukan clone pertama kali..."
+              mkdir -p /home/deploy/apps
+              cd /home/deploy/apps
+              git clone $REPO_URL sso
+              cd sso
+            else
+              echo "Folder ditemukan, melakukan pull kode terbaru..."
+              cd $APP_DIR
+              git fetch --all
+              git reset --hard origin/main
+            fi
 
-            # Matikan container lama (opsional, tapi disarankan untuk fresh start)
-            docker-compose down
+            # 2. Bersihkan sampah Docker SEBELUM build untuk mencegah disk penuh (No space left on device)
+            echo "Membersihkan sampah Docker lama..."
+            docker system prune -f
 
-            # Build ulang dan jalankan container yang baru
+            # 3. Build dan Jalankan
+            echo "Memulai proses build dan restart container..."
             docker-compose up -d --build
 
-            # Hapus image/container lama yang tidak terpakai untuk menghemat disk VPS
+            # 4. Bersihkan image 'dangling' setelah build selesai
             docker image prune -f
+            echo "Deployment berhasil!"
