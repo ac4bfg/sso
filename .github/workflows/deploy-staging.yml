@@ -9,6 +9,7 @@ on:
       - "BE/**"
       - "FE/**"
       - "docker-compose.yml"
+      - ".github/workflows/**"
 
 jobs:
   deploy:
