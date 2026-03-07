@@ -1,3 +1,4 @@
+# SSO Configuration - Updated build logic
 version: '3.8'
 
 x-env-mapping: &env-mapping
@@ -23,7 +24,6 @@ x-env-mapping: &env-mapping
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: sso-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
@@ -36,7 +36,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: sso-redis
     ports:
       - "6379:6379"
     restart: unless-stopped
@@ -45,7 +44,6 @@ services:
     build:
       context: ./BE
       dockerfile: Dockerfile
-    container_name: sso-backend
     ports:
       - "8081:8080"
     environment:
@@ -59,7 +57,6 @@ services:
     build:
       context: ./FE
       dockerfile: Dockerfile
-    container_name: sso-frontend
     ports:
       - "3001:3001"
     environment:
