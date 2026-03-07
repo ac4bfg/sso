@@ -1,1 +1,25 @@
 deploy.ps1
+
+# Backend
+BE/.env
+BE/tmp/
+BE/docs/
+BE/sso.exe
+BE/test.exe
+
+# Frontend
+FE/.env
+FE/.env.local
+FE/tmp/
+FE/.next/
+FE/node_modules/
+FE/out/
+
+# Standard
+.vscode/
+.idea/
+*.log
+*.exe
+dist/
+node_modules/
+.DS_Store
