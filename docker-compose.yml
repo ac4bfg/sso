@@ -16,7 +16,7 @@ x-env-mapping: &env-mapping
   JWT_SECRET: supersecretjwtkeymustbeatleast32chars
   JWT_ACCESS_EXPIRY: 15m
   JWT_REFRESH_EXPIRY: 168h
-  CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
   SEED_ADMIN_EMAIL: admin@ksm.co.id
   SEED_ADMIN_PASSWORD: admin123
   SEED_ADMIN_NAME: Administrator

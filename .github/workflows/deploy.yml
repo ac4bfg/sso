@@ -50,8 +50,9 @@ jobs:
           export REDIS_HOST_PORT=6379
           export BE_HOST_PORT=8081
           export FE_HOST_PORT=3001
-          export NEXT_PUBLIC_SSO_URL=http://202.155.157.59:3001
-          export NEXT_PUBLIC_API_URL=http://202.155.157.59:8081/api/v1
+          export NEXT_PUBLIC_SSO_URL=http://sso.ptkiansantang.com
+          export NEXT_PUBLIC_API_URL=http://sso.ptkiansantang.com:8081/api
+          export CORS_ORIGINS=http://sso.ptkiansantang.com,http://localhost:3000
           docker compose up -d --build --remove-orphans
 
           # Verify deployment
