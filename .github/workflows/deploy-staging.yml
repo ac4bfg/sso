@@ -13,41 +13,38 @@ on:
 jobs:
   deploy:
     name: Deploy to Staging VPS
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-      - name: Executing remote ssh commands to deploy
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_VPS_HOST }}
-          username: ${{ secrets.STAGING_VPS_USERNAME }}
-          key: ${{ secrets.STAGING_VPS_SSH_KEY }}
-          port: ${{ secrets.STAGING_VPS_PORT }} # Biasanya 22
-          script: |
-            # Menggunakan folder staging sesuai standar
-            export APP_DIR="/home/deploy/apps/sso-staging"
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            # Idempotent Setup: Clone if not exists, pull if does
-            if [ ! -d "$APP_DIR" ]; then
-                echo "Directory $APP_DIR does not exist. Cloning repository..."
-                mkdir -p /home/deploy/apps
-                cd /home/deploy/apps
-                git clone -b staging https://github.com/ac4bfg/sso.git sso-staging
-                cd sso-staging
-            else
-                echo "Directory $APP_DIR exists. Pulling latest shifts..."
-                cd "$APP_DIR"
-                git pull origin staging
-            fi
+      - name: Deploy SSO Staging
+        run: |
+          # Menggunakan folder staging sesuai standar
+          export APP_DIR="/home/deploy/apps/sso-staging"
 
-            # Proactive Cleanup to avoid "No space left on device"
-            echo "Cleaning up unused Docker resources..."
-            docker system prune -af
+          # Idempotent Setup: Clone if not exists, pull if does
+          if [ ! -d "$APP_DIR" ]; then
+              echo "Directory $APP_DIR does not exist. Cloning repository..."
+              mkdir -p /home/deploy/apps
+              cd /home/deploy/apps
+              git clone -b staging https://github.com/ac4bfg/sso.git sso-staging
+              cd sso-staging
+          else
+              echo "Directory $APP_DIR exists. Pulling latest shifts..."
+              cd "$APP_DIR"
+              git pull origin staging
+          fi
 
-            # Build and deploy with removal of orphans
-            echo "Building and starting containers..."
-            docker-compose up -d --build --remove-orphans
+          # Proactive Cleanup to avoid "No space left on device"
+          echo "Cleaning up unused Docker resources..."
+          docker system prune -af
 
-            # Verify deployment
-            echo "Verifying running containers..."
-            docker ps | grep sso
+          # Build and deploy with removal of orphans
+          echo "Building and starting containers..."
+          docker-compose up -d --build --remove-orphans
+
+          # Verify deployment
+          echo "Verifying running containers..."
+          docker ps | grep sso
