@@ -24,9 +24,9 @@ jobs:
           key: ${{ secrets.STAGING_VPS_SSH_KEY }}
           port: ${{ secrets.STAGING_VPS_PORT }} # Biasanya 22
           script: |
-            # Sesuaikan path ini dengan lokasi folder SSO versi staging di VPS Anda (harus beda dengan folder production)
-            # Contoh: /var/www/sso-staging
-            cd /var/www/sso-staging
+            # Menggunakan folder staging sesuai standar user deploy
+            mkdir -p /home/deploy/apps/sso-staging
+            cd /home/deploy/apps/sso-staging
 
             # Pastikan sedang di branch staging
             git checkout staging
