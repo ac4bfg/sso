@@ -1,0 +1,9 @@
+.git
+.idea
+.vscode
+*.exe
+sso_api
+node_modules
+tmp/
+.air.toml
+.env

@@ -1,0 +1,40 @@
+name: Deploy SSO to VPS
+
+on:
+  push:
+    branches:
+      - main
+    # Deploy hanya akan berjalan jika ada perubahan pada folder BE, FE, atau docker-compose.yml
+    paths:
+      - "BE/**"
+      - "FE/**"
+      - "docker-compose.yml"
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Executing remote ssh commands to deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }} # Biasanya 22
+          script: |
+            # Sesuaikan path ini dengan lokasi folder SSO di VPS Anda
+            cd /var/www/sso
+
+            # Tarik kode terbaru dari GitHub
+            git pull origin main
+
+            # Matikan container lama (opsional, tapi disarankan untuk fresh start)
+            docker-compose down
+
+            # Build ulang dan jalankan container yang baru
+            docker-compose up -d --build
+
+            # Hapus image/container lama yang tidak terpakai untuk menghemat disk VPS
+            docker image prune -f

@@ -1,0 +1,73 @@
+version: '3.8'
+
+x-env-mapping: &env-mapping
+  PORT: 8080
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_USER: postgres
+  DB_PASSWORD: password
+  DB_NAME: cost_control_sso
+  DB_SSLMODE: disable
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ""
+  REDIS_DB: 0
+  JWT_SECRET: supersecretjwtkeymustbeatleast32chars
+  JWT_ACCESS_EXPIRY: 15m
+  JWT_REFRESH_EXPIRY: 168h
+  CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+  SEED_ADMIN_EMAIL: admin@ksm.co.id
+  SEED_ADMIN_PASSWORD: admin123
+  SEED_ADMIN_NAME: Administrator
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: sso-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: cost_control_sso
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: sso-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  sso-be:
+    build:
+      context: ./BE
+      dockerfile: Dockerfile
+    container_name: sso-backend
+    ports:
+      - "8081:8080"
+    environment:
+      <<: *env-mapping
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  sso-fe:
+    build:
+      context: ./FE
+      dockerfile: Dockerfile
+    container_name: sso-frontend
+    ports:
+      - "3001:3001"
+    environment:
+      - NEXT_PUBLIC_SSO_URL=http://localhost:3001
+      - NEXT_PUBLIC_API_URL=http://localhost:8081/api/v1
+    depends_on:
+      - sso-be
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
