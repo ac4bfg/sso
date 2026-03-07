@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,7 +13,7 @@ import { ModeToggle } from "@/components/mode-toggle"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "@/components/ui/sonner"
 
-const LoginPage = () => {
+const LoginContent = () => {
     const { login, externalLogin, isAuthenticated, isLoading: authLoading } = useAuth()
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -290,6 +290,18 @@ const LoginPage = () => {
                 </div >
             </div >
         </div >
+    )
+}
+
+const LoginPage = () => {
+    return (
+        <Suspense fallback={
+            <div className="w-full h-screen flex items-center justify-center bg-zinc-950">
+                <Loader2 className="h-10 w-10 animate-spin text-amber-500" />
+            </div>
+        }>
+            <LoginContent />
+        </Suspense>
     )
 }
 
