@@ -24,18 +24,30 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }} # Biasanya 22
           script: |
-            # Menggunakan folder sesuai standar user deploy
-            mkdir -p /home/deploy/apps/sso
-            cd /home/deploy/apps/sso
+            # Menggunakan folder staging sesuai standar
+            export APP_DIR="/home/deploy/apps/sso-staging"
 
-            # Tarik kode terbaru dari GitHub
-            git pull origin main
+            # Idempotent Setup: Clone if not exists, pull if does
+            if [ ! -d "$APP_DIR" ]; then
+                echo "Directory $APP_DIR does not exist. Cloning repository..."
+                mkdir -p /home/deploy/apps
+                cd /home/deploy/apps
+                git clone -b staging https://github.com/ac4bfg/sso.git sso-staging
+                cd sso-staging
+            else
+                echo "Directory $APP_DIR exists. Pulling latest shifts..."
+                cd "$APP_DIR"
+                git pull origin staging
+            fi
 
-            # Matikan container lama (opsional, tapi disarankan untuk fresh start)
-            docker-compose down
+            # Proactive Cleanup to avoid "No space left on device"
+            echo "Cleaning up unused Docker resources..."
+            docker system prune -af
 
-            # Build ulang dan jalankan container yang baru
-            docker-compose up -d --build
+            # Build and deploy with removal of orphans
+            echo "Building and starting containers..."
+            docker-compose up -d --build --remove-orphans
 
-            # Hapus image/container lama yang tidak terpakai untuk menghemat disk VPS
-            docker image prune -f
+            # Verify deployment
+            echo "Verifying running containers..."
+            docker ps | grep sso
