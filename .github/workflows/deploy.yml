@@ -44,29 +44,29 @@ jobs:
           fi
 
           # Tulis .env dari secrets (selalu update tiap deploy)
-          cat > "$APP_DIR/.env" << EOF
-JWT_SECRET=${JWT_SECRET}
-DB_PASSWORD=${DB_PASSWORD}
-SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL}
-SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD}
-GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-DB_HOST_PORT=5432
-REDIS_HOST_PORT=6379
-BE_HOST_PORT=8081
-FE_HOST_PORT=3001
-CORS_ORIGINS=https://sso.ptkiansantang.com,https://cost-control.ptkiansantang.com,https://invoice.ptkiansantang.com,https://procurement.ptkiansantang.com
-COOKIE_DOMAIN=.ptkiansantang.com
-COOKIE_SECURE=true
-FRONTEND_URL=https://sso.ptkiansantang.com
-GOOGLE_REDIRECT_URL=https://sso.ptkiansantang.com/api/auth/google/callback
-NEXT_PUBLIC_SSO_URL=https://sso.ptkiansantang.com
-NEXT_PUBLIC_API_URL=https://sso.ptkiansantang.com/api
-NEXT_PUBLIC_DEFAULT_APP_URL=https://cost-control.ptkiansantang.com
-APP_URL_COST_CONTROL=https://cost-control.ptkiansantang.com
-APP_URL_INVOICE=https://invoice.ptkiansantang.com
-APP_URL_PROCUREMENT=https://procurement.ptkiansantang.com
-EOF
+          {
+            echo "JWT_SECRET=${JWT_SECRET}"
+            echo "DB_PASSWORD=${DB_PASSWORD}"
+            echo "SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL}"
+            echo "SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD}"
+            echo "GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
+            echo "GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}"
+            echo "DB_HOST_PORT=5432"
+            echo "REDIS_HOST_PORT=6379"
+            echo "BE_HOST_PORT=8081"
+            echo "FE_HOST_PORT=3001"
+            echo "CORS_ORIGINS=https://sso.ptkiansantang.com,https://cost-control.ptkiansantang.com,https://invoice.ptkiansantang.com,https://procurement.ptkiansantang.com"
+            echo "COOKIE_DOMAIN=.ptkiansantang.com"
+            echo "COOKIE_SECURE=true"
+            echo "FRONTEND_URL=https://sso.ptkiansantang.com"
+            echo "GOOGLE_REDIRECT_URL=https://sso.ptkiansantang.com/api/auth/google/callback"
+            echo "NEXT_PUBLIC_SSO_URL=https://sso.ptkiansantang.com"
+            echo "NEXT_PUBLIC_API_URL=https://sso.ptkiansantang.com/api"
+            echo "NEXT_PUBLIC_DEFAULT_APP_URL=https://cost-control.ptkiansantang.com"
+            echo "APP_URL_COST_CONTROL=https://cost-control.ptkiansantang.com"
+            echo "APP_URL_INVOICE=https://invoice.ptkiansantang.com"
+            echo "APP_URL_PROCUREMENT=https://procurement.ptkiansantang.com"
+          } > "$APP_DIR/.env"
 
           cd "$APP_DIR"
 
