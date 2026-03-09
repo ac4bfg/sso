@@ -90,7 +90,7 @@ class SsoWaffleMenu extends HTMLElement {
         }
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
-        window.location.href = `${this.ssoFrontendUrl}/login?redirect_uri=${encodeURIComponent(window.location.origin)}`;
+        window.location.href = `${this.ssoFrontendUrl}/login?redirect_uri=${encodeURIComponent(window.location.href)}`;
     }
 
     render() {

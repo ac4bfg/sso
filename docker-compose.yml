@@ -5,9 +5,9 @@ x-env-mapping: &env-mapping
   PORT: 8080
   DB_HOST: postgres
   DB_PORT: 5432
-  DB_USER: postgres
-  DB_PASSWORD: password
-  DB_NAME: cost_control_sso
+  DB_USER: ${DB_USER:-postgres}
+  DB_PASSWORD: ${DB_PASSWORD:-postgres}
+  DB_NAME: ${DB_NAME:-sso}
   DB_SSLMODE: disable
   REDIS_HOST: redis
   REDIS_PORT: 6379
@@ -34,9 +34,9 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: cost_control_sso
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-sso}
     ports:
       - "${DB_HOST_PORT:-5432}:5432"
     volumes:
