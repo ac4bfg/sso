@@ -13,13 +13,22 @@ x-env-mapping: &env-mapping
   REDIS_PORT: 6379
   REDIS_PASSWORD: ""
   REDIS_DB: 0
-  JWT_SECRET: supersecretjwtkeymustbeatleast32chars
+  JWT_SECRET: ${JWT_SECRET:-supersecretjwtkeymustbeatleast32chars}
   JWT_ACCESS_EXPIRY: 15m
   JWT_REFRESH_EXPIRY: 168h
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
-  SEED_ADMIN_EMAIL: admin@ksm.co.id
-  SEED_ADMIN_PASSWORD: admin123
-  SEED_ADMIN_NAME: Administrator
+  COOKIE_DOMAIN: ${COOKIE_DOMAIN:-localhost}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:8081/api/auth/google/callback}
+  SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@ksm.co.id}
+  SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin123}
+  SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-Administrator}
+  APP_URL_COST_CONTROL: ${APP_URL_COST_CONTROL:-http://localhost:3000}
+  APP_URL_INVOICE: ${APP_URL_INVOICE:-http://localhost:3003}
+  APP_URL_PROCUREMENT: ${APP_URL_PROCUREMENT:-http://localhost:3002}
 
 services:
   postgres:
@@ -61,7 +70,7 @@ services:
       - "${FE_HOST_PORT:-3001}:3001"
     environment:
       - NEXT_PUBLIC_SSO_URL=${NEXT_PUBLIC_SSO_URL:-http://localhost:3001}
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8081/api/v1}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8081/api}
     depends_on:
       - sso-be
     restart: unless-stopped

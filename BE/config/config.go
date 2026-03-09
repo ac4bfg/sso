@@ -42,10 +42,18 @@ type Config struct {
 	// CORS
 	CORSOrigins string
 
+	// Frontend URL (used for OAuth redirects)
+	FrontendURL string
+
 	// Seed
 	SeedAdminEmail    string
 	SeedAdminPassword string
 	SeedAdminName     string
+
+	// App Base URLs (untuk seed waffle menu)
+	AppURLCostControl string
+	AppURLInvoice     string
+	AppURLProcurement string
 }
 
 func Load() *Config {
@@ -80,9 +88,15 @@ func Load() *Config {
 
 		CORSOrigins: getEnv("CORS_ORIGINS", "http://localhost:3000"),
 
+		FrontendURL: getEnv("FRONTEND_URL", "http://localhost:3001"),
+
 		SeedAdminEmail:    getEnv("SEED_ADMIN_EMAIL", "admin@ksm.co.id"),
 		SeedAdminPassword: getEnv("SEED_ADMIN_PASSWORD", "admin123"),
 		SeedAdminName:     getEnv("SEED_ADMIN_NAME", "Administrator"),
+
+		AppURLCostControl: getEnv("APP_URL_COST_CONTROL", "http://localhost:3000"),
+		AppURLInvoice:     getEnv("APP_URL_INVOICE", "http://localhost:3003"),
+		AppURLProcurement: getEnv("APP_URL_PROCUREMENT", "http://localhost:3002"),
 	}
 }
 

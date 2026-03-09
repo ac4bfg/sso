@@ -282,9 +282,9 @@ func (s *AuthService) SeedAdmin(name, email, password string) error {
 
 func (s *AuthService) SeedAppsAndAssignAdmin(adminEmail string) error {
 	appsToSeed := []models.App{
-		{Name: "Cost Control", Description: "Project Cost Management", Icon: "📊", BaseURL: "http://localhost:3000"},
-		{Name: "Procurement", Description: "Purchase Orders & Vendors", Icon: "🛒", BaseURL: "http://localhost:3002"},
-		{Name: "Invoice", Description: "Billing & Invoicing", Icon: "🧾", BaseURL: "http://localhost:3003"},
+		{Name: "Cost Control", Description: "Project Cost Management", Icon: "📊", BaseURL: s.cfg.AppURLCostControl},
+		{Name: "Procurement", Description: "Purchase Orders & Vendors", Icon: "🛒", BaseURL: s.cfg.AppURLProcurement},
+		{Name: "Invoice", Description: "Billing & Invoicing", Icon: "🧾", BaseURL: s.cfg.AppURLInvoice},
 	}
 
 	for _, app := range appsToSeed {

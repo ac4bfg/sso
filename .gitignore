@@ -1,15 +1,17 @@
 deploy.ps1
+.env
 
 # Backend
 BE/.env
 BE/tmp/
 BE/docs/
-BE/sso.exe
-BE/test.exe
+BE/*.exe
+BE/dump.rdb
 
 # Frontend
 FE/.env
 FE/.env.local
+FE/.env.production.local
 FE/tmp/
 FE/.next/
 FE/node_modules/
@@ -23,3 +25,4 @@ FE/out/
 dist/
 node_modules/
 .DS_Store
+dump.rdb

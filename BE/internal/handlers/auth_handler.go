@@ -50,7 +50,7 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 	if err != nil {
 		h.logAudit(c, nil, "", "google_login", false, err.Error())
 		// Redirect to frontend login with error
-		return c.Redirect(h.cfg.CORSOrigins+"/login?error=google_auth_failed", fiber.StatusTemporaryRedirect)
+		return c.Redirect(h.cfg.FrontendURL+"/login?error=google_auth_failed", fiber.StatusTemporaryRedirect)
 	}
 
 	h.logAudit(c, &result.User.ID, result.User.Email, "google_login", true, "")
@@ -61,7 +61,7 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 	// Better approach: set a temporary short-lived cookie for the access token, or use a "code" exchange flow for the SPA too.
 	// For now, let's pass it in query param -> simple and works.
 	// Redirect to frontend dashboard with access token
-	redirectURL := fmt.Sprintf("%s/dashboard?access_token=%s", h.cfg.CORSOrigins, result.AccessToken)
+	redirectURL := fmt.Sprintf("%s/dashboard?access_token=%s", h.cfg.FrontendURL, result.AccessToken)
 	return c.Redirect(redirectURL, fiber.StatusTemporaryRedirect)
 }
 
