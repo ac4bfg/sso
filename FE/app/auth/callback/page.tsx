@@ -38,8 +38,19 @@ const CallbackContent = () => {
                 if (redirectUri) {
                     window.location.href = `${redirectUri}?access_token=${accessToken}`
                 } else {
-                    const defaultApp = process.env.NEXT_PUBLIC_DEFAULT_APP_URL || "http://localhost:3000"
-                    window.location.href = `${defaultApp}?access_token=${accessToken}`
+                    // Redirect ke app pertama yang di-assign ke user
+                    let destUrl = process.env.NEXT_PUBLIC_DEFAULT_APP_URL || "http://localhost:3001/dashboard"
+                    try {
+                        const appsRes = await fetch(`${apiUrl}/user/apps`, {
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        })
+                        if (appsRes.ok) {
+                            const appsData = await appsRes.json()
+                            const apps: { base_url: string }[] = appsData.data || []
+                            if (apps.length > 0) destUrl = apps[0].base_url
+                        }
+                    } catch { /* use default */ }
+                    window.location.href = `${destUrl}?access_token=${accessToken}`
                 }
             } catch {
                 const ssoUrl = process.env.NEXT_PUBLIC_SSO_URL || "http://localhost:3001"

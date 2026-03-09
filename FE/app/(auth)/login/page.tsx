@@ -13,6 +13,21 @@ import { ModeToggle } from "@/components/mode-toggle"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "@/components/ui/sonner"
 
+// Fetch first app URL assigned to the logged-in user
+async function getFirstAppUrl(token: string): Promise<string> {
+    try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081/api"
+        const res = await fetch(`${apiUrl}/user/apps`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) throw new Error()
+        const data = await res.json()
+        const apps: { base_url: string }[] = data.data || []
+        if (apps.length > 0) return apps[0].base_url
+    } catch { /* fallback below */ }
+    return process.env.NEXT_PUBLIC_DEFAULT_APP_URL || "http://localhost:3001/dashboard"
+}
+
 const LoginContent = () => {
     const { login, externalLogin, isAuthenticated, isLoading: authLoading } = useAuth()
     const router = useRouter()
@@ -40,11 +55,13 @@ const LoginContent = () => {
     useEffect(() => {
         if (!authLoading && isAuthenticated) {
             const redirectUri = searchParams.get("redirect_uri")
-            const token = localStorage.getItem("access_token")
+            const token = localStorage.getItem("access_token") || ""
             if (redirectUri && token) {
                 window.location.href = `${redirectUri}?access_token=${token}`
             } else {
-                window.location.href = process.env.NEXT_PUBLIC_DEFAULT_APP_URL || "http://localhost:3000"
+                getFirstAppUrl(token).then((url) => {
+                    window.location.href = url
+                })
             }
         }
     }, [authLoading, isAuthenticated, router, searchParams])
@@ -57,13 +74,13 @@ const LoginContent = () => {
         const handleAuth = async (token: string) => {
             try {
                 await externalLogin(token)
-                // Use sessionStorage to trigger toast on dashboard
                 sessionStorage.setItem("login_toast", "true")
                 const redirectUri = searchParams.get("redirect_uri")
                 if (redirectUri) {
                     window.location.href = `${redirectUri}?access_token=${token}`
                 } else {
-                    window.location.href = process.env.NEXT_PUBLIC_DEFAULT_APP_URL || "http://localhost:3000"
+                    const url = await getFirstAppUrl(token)
+                    window.location.href = url
                 }
             } catch {
                 toast.error("Authentication failed", {
@@ -100,7 +117,8 @@ const LoginContent = () => {
             if (redirectUri) {
                 window.location.href = `${redirectUri}?access_token=${token}`
             } else {
-                window.location.href = process.env.NEXT_PUBLIC_DEFAULT_APP_URL || "http://localhost:3000"
+                const url = await getFirstAppUrl(token)
+                window.location.href = url
             }
         } catch (err: unknown) {
             const axiosError = err as { response?: { data?: { message?: string } } }
