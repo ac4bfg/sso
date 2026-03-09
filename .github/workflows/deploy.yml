@@ -62,7 +62,7 @@ jobs:
             echo "GOOGLE_REDIRECT_URL=https://sso.ptkiansantang.com/api/auth/google/callback"
             echo "NEXT_PUBLIC_SSO_URL=https://sso.ptkiansantang.com"
             echo "NEXT_PUBLIC_API_URL=https://sso.ptkiansantang.com/api"
-            echo "NEXT_PUBLIC_DEFAULT_APP_URL=https://cost-control.ptkiansantang.com"
+            echo "NEXT_PUBLIC_DEFAULT_APP_URL=https://sso.ptkiansantang.com/dashboard"
             echo "APP_URL_COST_CONTROL=https://cost-control.ptkiansantang.com"
             echo "APP_URL_INVOICE=https://invoice.ptkiansantang.com"
             echo "APP_URL_PROCUREMENT=https://procurement.ptkiansantang.com"
