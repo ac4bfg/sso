@@ -124,6 +124,7 @@ func main() {
 	auth.Post("/login", authLimiter, authHandler.Login)
 	auth.Post("/refresh", authHandler.Refresh)
 	auth.Post("/logout", authHandler.Logout)
+	auth.Post("/exchange", authHandler.ExchangeToken)
 	auth.Get("/google", authHandler.GoogleLogin)
 	auth.Get("/google/callback", authHandler.GoogleCallback)
 

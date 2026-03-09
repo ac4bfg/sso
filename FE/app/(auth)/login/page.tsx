@@ -113,7 +113,7 @@ const LoginContent = () => {
     }
 
     const handleGoogleLogin = () => {
-        window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/auth/google`
+        window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081/api"}/auth/google`
     }
 
     return (
@@ -267,7 +267,7 @@ const LoginContent = () => {
                                 type="button"
                                 variant="outline"
                                 className="w-full h-11 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all"
-                                onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"}/auth/google`}
+                                onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081/api"}/auth/google`}
                                 disabled={isGoogleCallback || authLoading}
                             >
                                 <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">

@@ -13,6 +13,7 @@ import (
 	"sso/pkg/validator"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 )
 
 type AuthHandler struct {
@@ -56,12 +57,14 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 	h.logAudit(c, &result.User.ID, result.User.Email, "google_login", true, "")
 	h.setRefreshTokenCookie(c, result.RefreshToken)
 
-	// Redirect to frontend with access token in URL fragment (or query param)
-	// Security note: passing token in URL is a bit risky but standard for OAuth redirects to SPA.
-	// Better approach: set a temporary short-lived cookie for the access token, or use a "code" exchange flow for the SPA too.
-	// For now, let's pass it in query param -> simple and works.
-	// Redirect to frontend dashboard with access token
-	redirectURL := fmt.Sprintf("%s/dashboard?access_token=%s", h.cfg.FrontendURL, result.AccessToken)
+	// Store access token in Redis under a short-lived temp token (1 min)
+	// FE will exchange this temp token for the actual access token via /api/auth/exchange
+	tempToken := uuid.New().String()
+	if err := h.authService.StoreTempToken(tempToken, result.AccessToken); err != nil {
+		return c.Redirect(h.cfg.FrontendURL+"/login?error=google_auth_failed", fiber.StatusTemporaryRedirect)
+	}
+
+	redirectURL := fmt.Sprintf("%s/auth/callback?code=%s", h.cfg.FrontendURL, tempToken)
 	return c.Redirect(redirectURL, fiber.StatusTemporaryRedirect)
 }
 
@@ -246,6 +249,26 @@ func (h *AuthHandler) GetMe(c *fiber.Ctx) error {
 	}
 
 	return response.Success(c, fiber.StatusOK, "User data", user)
+}
+
+// ExchangeToken POST /api/auth/exchange
+// Menukar temp code (dari Google callback) dengan access token
+func (h *AuthHandler) ExchangeToken(c *fiber.Ctx) error {
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := c.BodyParser(&body); err != nil || body.Code == "" {
+		return response.Error(c, fiber.StatusBadRequest, "Code is required", nil)
+	}
+
+	accessToken, err := h.authService.ExchangeTempToken(body.Code)
+	if err != nil {
+		return response.Error(c, fiber.StatusUnauthorized, "Token not found or expired", nil)
+	}
+
+	return response.Success(c, fiber.StatusOK, "Token exchanged", fiber.Map{
+		"access_token": accessToken,
+	})
 }
 
 // CheckSession HEAD /api/auth/check

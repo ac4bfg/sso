@@ -257,6 +257,23 @@ func (s *AuthService) generateTokens(user *models.User, userAgent, ipAddress str
 	}, nil
 }
 
+// StoreTempToken menyimpan temp token ke Redis dengan TTL 1 menit
+func (s *AuthService) StoreTempToken(tempToken, accessToken string) error {
+	key := fmt.Sprintf("temp_token:%s", tempToken)
+	return s.redisClient.Set(key, accessToken, 1*time.Minute)
+}
+
+// ExchangeTempToken menukar temp token dengan access token, lalu hapus dari Redis
+func (s *AuthService) ExchangeTempToken(tempToken string) (string, error) {
+	key := fmt.Sprintf("temp_token:%s", tempToken)
+	accessToken, err := s.redisClient.Get(key)
+	if err != nil {
+		return "", errors.New("token not found or expired")
+	}
+	_ = s.redisClient.Del(key)
+	return accessToken, nil
+}
+
 // SeedAdmin membuat admin pertama jika belum ada user sama sekali
 func (s *AuthService) SeedAdmin(name, email, password string) error {
 	count, _ := s.userRepo.Count()
