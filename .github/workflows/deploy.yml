@@ -30,16 +30,27 @@ jobs:
         run: |
           export APP_DIR="/home/deploy/apps/sso"
 
-          if [ ! -d "$APP_DIR" ]; then
-              echo "Directory $APP_DIR does not exist. Cloning repository..."
-              mkdir -p /home/deploy/apps
-              cd /home/deploy/apps
-              git clone https://github.com/ac4bfg/sso.git
-              cd sso
-          else
-              echo "Directory $APP_DIR exists. Pulling latest changes..."
+          # Cek apakah folder ada DAN merupakan git repo yang valid
+          if [ -d "$APP_DIR/.git" ]; then
+              echo "Git repo exists. Pulling latest changes..."
               cd "$APP_DIR"
               git pull origin main
+          else
+              echo "Not a git repo. Cloning fresh..."
+              # Backup .env jika ada sebelum hapus folder
+              if [ -f "$APP_DIR/.env" ]; then
+                  cp "$APP_DIR/.env" /tmp/sso-env-backup
+              fi
+              rm -rf "$APP_DIR"
+              mkdir -p /home/deploy/apps
+              cd /home/deploy/apps
+              git clone https://github.com/ac4bfg/sso.git sso
+              # Restore .env setelah clone
+              if [ -f /tmp/sso-env-backup ]; then
+                  cp /tmp/sso-env-backup "$APP_DIR/.env"
+                  rm /tmp/sso-env-backup
+              fi
+              cd "$APP_DIR"
           fi
 
           echo "Cleaning up unused Docker images..."

@@ -30,16 +30,24 @@ jobs:
         run: |
           export APP_DIR="/home/deploy/apps/sso-staging"
 
-          if [ ! -d "$APP_DIR" ]; then
-              echo "Directory $APP_DIR does not exist. Cloning repository..."
+          if [ -d "$APP_DIR/.git" ]; then
+              echo "Git repo exists. Pulling latest changes..."
+              cd "$APP_DIR"
+              git pull origin staging
+          else
+              echo "Not a git repo. Cloning fresh..."
+              if [ -f "$APP_DIR/.env" ]; then
+                  cp "$APP_DIR/.env" /tmp/sso-staging-env-backup
+              fi
+              rm -rf "$APP_DIR"
               mkdir -p /home/deploy/apps
               cd /home/deploy/apps
               git clone -b staging https://github.com/ac4bfg/sso.git sso-staging
-              cd sso-staging
-          else
-              echo "Directory $APP_DIR exists. Pulling latest changes..."
+              if [ -f /tmp/sso-staging-env-backup ]; then
+                  cp /tmp/sso-staging-env-backup "$APP_DIR/.env"
+                  rm /tmp/sso-staging-env-backup
+              fi
               cd "$APP_DIR"
-              git pull origin staging
           fi
 
           echo "Cleaning up unused Docker images..."
