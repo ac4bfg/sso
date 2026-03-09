@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"sso/config"
@@ -96,7 +97,20 @@ func main() {
 			return true
 		}
 	} else {
-		corsConfig.AllowOrigins = cfg.CORSOrigins
+		allowedOrigins := cfg.CORSOrigins
+		corsConfig.AllowOriginsFunc = func(origin string) bool {
+			// Allow all localhost origins regardless of port (for local dev)
+			if strings.HasPrefix(origin, "http://localhost:") || origin == "http://localhost" {
+				return true
+			}
+			// Check against explicit allowed origins
+			for _, o := range strings.Split(allowedOrigins, ",") {
+				if strings.TrimSpace(o) == origin {
+					return true
+				}
+			}
+			return false
+		}
 	}
 
 	app.Use(cors.New(corsConfig))
