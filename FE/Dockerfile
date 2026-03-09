@@ -11,6 +11,14 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+ARG NEXT_PUBLIC_SSO_URL
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_DEFAULT_APP_URL
+ENV NEXT_PUBLIC_SSO_URL=$NEXT_PUBLIC_SSO_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_DEFAULT_APP_URL=$NEXT_PUBLIC_DEFAULT_APP_URL
+
 RUN --mount=type=cache,id=next-build,target=/app/.next/cache \
     corepack enable pnpm && pnpm run build
 
