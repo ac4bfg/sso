@@ -37,6 +37,7 @@ func main() {
 	tokenRepo := repositories.NewTokenRepository(database.DB)
 	auditRepo := repositories.NewAuditRepository(database.DB)
 	appRepo := repositories.NewAppRepository(database.DB)
+	roleRepo := repositories.NewRoleRepository(database.DB)
 
 	go func() {
 		if err := tokenRepo.DeleteExpired(); err == nil {
@@ -55,9 +56,11 @@ func main() {
 		}
 	}()
 
-	authService := services.NewAuthService(cfg, userRepo, tokenRepo, auditRepo, appRepo, redisClient)
+	authService := services.NewAuthService(cfg, userRepo, tokenRepo, auditRepo, appRepo, roleRepo, redisClient)
 	oauthService := services.NewOAuthService(cfg, authService, userRepo)
-	userService := services.NewUserService(userRepo, appRepo)
+	userService := services.NewUserService(userRepo, appRepo, roleRepo)
+	appService := services.NewAppService(appRepo, roleRepo)
+	roleService := services.NewRoleService(roleRepo)
 
 	if err := authService.SeedAdmin(cfg.SeedAdminName, cfg.SeedAdminEmail, cfg.SeedAdminPassword); err != nil {
 		log.Printf("⚠️ Gagal seed admin: %v", err)
@@ -73,7 +76,9 @@ func main() {
 
 	authHandler := handlers.NewAuthHandler(authService, oauthService, auditRepo, cfg)
 	sessionHandler := handlers.NewSessionHandler(tokenRepo, redisClient)
-	userHandler := handlers.NewUserHandler(userService)
+	userHandler := handlers.NewUserHandler(userService, auditRepo)
+	appHandler := handlers.NewAppHandler(appService)
+	roleHandler := handlers.NewRoleHandler(roleService)
 
 	app := fiber.New(fiber.Config{
 		AppName:      "Cost Control SSO",
@@ -151,18 +156,40 @@ func main() {
 	sessions.Get("/", sessionHandler.GetSessions)
 	sessions.Delete("/:id", sessionHandler.RevokeSession)
 
+	roles := api.Group("/roles")
+	roles.Use(middleware.AuthMiddleware(cfg, redisClient, tokenRepo))
+	roles.Use(middleware.AdminAccessMiddleware(roleRepo))
+	roles.Get("/", roleHandler.GetAll)
+	roles.Post("/", roleHandler.Create)
+	roles.Put("/:id", roleHandler.Update)
+	roles.Delete("/:id", roleHandler.Delete)
+
 	users := api.Group("/users")
 	users.Use(middleware.AuthMiddleware(cfg, redisClient, tokenRepo))
-	users.Use(middleware.RoleMiddleware("admin"))
+	users.Use(middleware.AdminAccessMiddleware(roleRepo))
 	users.Get("/", userHandler.GetAll)
 	users.Get("/:id", userHandler.GetByID)
 	users.Put("/:id", userHandler.Update)
 	users.Delete("/:id", userHandler.Delete)
 	users.Patch("/:id/role", userHandler.ChangeRole)
+	users.Get("/:id/apps", userHandler.GetUserApps)
+	users.Post("/:id/apps", userHandler.AssignApp)
+	users.Delete("/:id/apps/:appId", userHandler.RevokeApp)
+
+	apps := api.Group("/apps")
+	apps.Use(middleware.AuthMiddleware(cfg, redisClient, tokenRepo))
+	apps.Use(middleware.AdminAccessMiddleware(roleRepo))
+	apps.Get("/", appHandler.GetAll)
+	apps.Get("/:id", appHandler.GetByID)
+	apps.Post("/", appHandler.Create)
+	apps.Put("/:id", appHandler.Update)
+	apps.Delete("/:id", appHandler.Delete)
 
 	userSelf := api.Group("/user")
 	userSelf.Use(middleware.AuthMiddleware(cfg, redisClient, tokenRepo))
 	userSelf.Get("/apps", userHandler.GetMyApps)
+	userSelf.Get("/activity", userHandler.GetMyActivity)
+	userSelf.Get("/login-stats", userHandler.GetLoginStats)
 	userSelf.Put("/profile", userHandler.UpdateProfile)
 	userSelf.Put("/password", userHandler.ChangePassword)
 

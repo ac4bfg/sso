@@ -9,8 +9,10 @@ interface User {
     name: string
     email: string
     role: string
+    role_label: string
+    can_access_admin: boolean
     is_active: boolean
-    is_password_set: boolean // New field
+    is_password_set: boolean
     last_login_at: string | null
     created_at: string
 }

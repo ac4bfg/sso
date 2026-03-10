@@ -1,12 +1,20 @@
+import type { LucideIcon } from "lucide-react"
 import {
     LayoutDashboard,
-    Briefcase,
-    FileCheck,
-    PieChart,
-    Database,
+    Users,
+    AppWindow,
+    ShieldCheck,
 } from "lucide-react"
 
-export const MENU_ITEMS = [
+export interface MenuItem {
+    label: string
+    icon: LucideIcon
+    href: string
+    color: string
+    subroutes?: { label: string; href: string }[]
+}
+
+export const MENU_ITEMS: MenuItem[] = [
     {
         label: "Dashboard",
         icon: LayoutDashboard,
@@ -14,27 +22,21 @@ export const MENU_ITEMS = [
         color: "text-primary",
     },
     {
-        label: "Projects",
-        icon: Briefcase,
-        href: "/projects",
-        color: "text-primary",
-    },
-    // Removed Approval Center
-    {
-        label: "Reports",
-        icon: PieChart,
-        href: "/reports",
+        label: "Users",
+        icon: Users,
+        href: "/admin/users",
         color: "text-primary",
     },
     {
-        label: "Master Data",
-        icon: Database,
-        href: "/master",
+        label: "Applications",
+        icon: AppWindow,
+        href: "/admin/apps",
         color: "text-primary",
-        subroutes: [
-            { label: "Cost Standards", href: "/master/items" },
-            { label: "Stakeholders", href: "/master/stakeholders" },
-            { label: "References", href: "/master/references" },
-        ]
+    },
+    {
+        label: "Roles",
+        icon: ShieldCheck,
+        href: "/admin/roles",
+        color: "text-primary",
     },
 ]

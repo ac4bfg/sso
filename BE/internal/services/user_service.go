@@ -13,10 +13,11 @@ import (
 type UserService struct {
 	userRepo *repositories.UserRepository
 	appRepo  *repositories.AppRepository
+	roleRepo *repositories.RoleRepository
 }
 
-func NewUserService(userRepo *repositories.UserRepository, appRepo *repositories.AppRepository) *UserService {
-	return &UserService{userRepo: userRepo, appRepo: appRepo}
+func NewUserService(userRepo *repositories.UserRepository, appRepo *repositories.AppRepository, roleRepo *repositories.RoleRepository) *UserService {
+	return &UserService{userRepo: userRepo, appRepo: appRepo, roleRepo: roleRepo}
 }
 
 type UpdateUserInput struct {
@@ -34,6 +35,14 @@ type ChangePasswordInput struct {
 	NewPassword     string `json:"new_password"`
 }
 
+// roleInfo mengambil label dan can_access_admin dari DB dengan fallback
+func (s *UserService) roleInfo(roleName string) (label string, canAccessAdmin bool) {
+	if r, err := s.roleRepo.FindByName(roleName); err == nil {
+		return r.Label, r.CanAccessAdmin
+	}
+	return roleName, false
+}
+
 // GetAll mengambil semua user
 func (s *UserService) GetAll() ([]models.UserResponse, error) {
 	users, err := s.userRepo.FindAll()
@@ -43,7 +52,8 @@ func (s *UserService) GetAll() ([]models.UserResponse, error) {
 
 	var responses []models.UserResponse
 	for _, u := range users {
-		responses = append(responses, u.ToResponse())
+		label, canAdmin := s.roleInfo(u.Role)
+		responses = append(responses, u.ToResponseWithLabel(label, canAdmin))
 	}
 	return responses, nil
 }
@@ -58,7 +68,8 @@ func (s *UserService) GetByID(id string) (*models.UserResponse, error) {
 		return nil, err
 	}
 
-	resp := user.ToResponse()
+	label, canAdmin := s.roleInfo(user.Role)
+	resp := user.ToResponseWithLabel(label, canAdmin)
 	return &resp, nil
 }
 
@@ -101,7 +112,8 @@ func (s *UserService) Update(id string, input UpdateUserInput) (*models.UserResp
 		return nil, errors.New("failed to update user")
 	}
 
-	resp := user.ToResponse()
+	label, canAdmin := s.roleInfo(user.Role)
+	resp := user.ToResponseWithLabel(label, canAdmin)
 	return &resp, nil
 }
 
@@ -117,10 +129,9 @@ func (s *UserService) Delete(id string) error {
 
 // ChangeRole mengubah role user
 func (s *UserService) ChangeRole(id string, input ChangeRoleInput) (*models.UserResponse, error) {
-	// Validasi role
-	validRoles := map[string]bool{"admin": true, "manager": true, "staff": true}
-	if !validRoles[input.Role] {
-		return nil, errors.New("invalid role (admin, manager, staff)")
+	// Validasi role exist di tabel roles
+	if _, err := s.roleRepo.FindByName(input.Role); err != nil {
+		return nil, errors.New("invalid role: role not found")
 	}
 
 	user, err := s.userRepo.FindByID(id)
@@ -133,8 +144,38 @@ func (s *UserService) ChangeRole(id string, input ChangeRoleInput) (*models.User
 		return nil, errors.New("failed to update role")
 	}
 
-	resp := user.ToResponse()
+	label, canAdmin := s.roleInfo(user.Role)
+	resp := user.ToResponseWithLabel(label, canAdmin)
 	return &resp, nil
+}
+
+// AssignApp assign satu app ke user dengan role tertentu
+func (s *UserService) AssignApp(userID, appID, role string) error {
+	_, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return errors.New("user not found")
+	}
+	ua := &models.UserAppRole{UserID: userID, AppID: appID, Role: role}
+	return s.appRepo.AssignUserToApp(ua)
+}
+
+// RevokeApp cabut akses app dari user
+func (s *UserService) RevokeApp(userID, appID string) error {
+	return s.appRepo.RevokeUserFromApp(userID, appID)
+}
+
+// GetUserApps mengambil daftar aplikasi beserta role untuk user tertentu (admin use)
+func (s *UserService) GetUserApps(userID string) ([]models.AppWithRole, error) {
+	apps, err := s.appRepo.FindAppsWithRolesByUserID(userID)
+	if err != nil {
+		return nil, errors.New("failed to fetch user apps")
+	}
+	return apps, nil
+}
+
+// GetAllApps mengambil semua app yang terdaftar
+func (s *UserService) GetAllApps() ([]models.App, error) {
+	return s.appRepo.FindAll()
 }
 
 // ChangePassword mengubah password user

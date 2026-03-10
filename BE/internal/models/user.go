@@ -33,14 +33,16 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 
 // UserResponse digunakan untuk response tanpa field sensitif
 type UserResponse struct {
-	ID            string     `json:"id"`
-	Name          string     `json:"name"`
-	Email         string     `json:"email"`
-	Role          string     `json:"role"`
-	IsActive      bool       `json:"is_active"`
-	IsPasswordSet bool       `json:"is_password_set"`
-	LastLoginAt   *time.Time `json:"last_login_at"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	Email          string     `json:"email"`
+	Role           string     `json:"role"`
+	RoleLabel      string     `json:"role_label"`
+	CanAccessAdmin bool       `json:"can_access_admin"`
+	IsActive       bool       `json:"is_active"`
+	IsPasswordSet  bool       `json:"is_password_set"`
+	LastLoginAt    *time.Time `json:"last_login_at"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 func (u *User) ToResponse() UserResponse {
@@ -49,9 +51,19 @@ func (u *User) ToResponse() UserResponse {
 		Name:          u.Name,
 		Email:         u.Email,
 		Role:          u.Role,
+		RoleLabel:     u.Role, // default fallback, diisi oleh service jika ada roleRepo
 		IsActive:      u.IsActive,
 		IsPasswordSet: u.IsPasswordSet,
 		LastLoginAt:   u.LastLoginAt,
 		CreatedAt:     u.CreatedAt,
 	}
+}
+
+func (u *User) ToResponseWithLabel(label string, canAccessAdmin bool) UserResponse {
+	r := u.ToResponse()
+	if label != "" {
+		r.RoleLabel = label
+	}
+	r.CanAccessAdmin = canAccessAdmin
+	return r
 }

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -21,19 +22,29 @@ type AuthService struct {
 	tokenRepo   *repositories.TokenRepository
 	auditRepo   *repositories.AuditRepository
 	appRepo     *repositories.AppRepository
+	roleRepo    *repositories.RoleRepository
 	redisClient *cache.RedisClient
 	cfg         *config.Config
 }
 
-func NewAuthService(cfg *config.Config, userRepo *repositories.UserRepository, tokenRepo *repositories.TokenRepository, auditRepo *repositories.AuditRepository, appRepo *repositories.AppRepository, redisClient *cache.RedisClient) *AuthService {
+func NewAuthService(cfg *config.Config, userRepo *repositories.UserRepository, tokenRepo *repositories.TokenRepository, auditRepo *repositories.AuditRepository, appRepo *repositories.AppRepository, roleRepo *repositories.RoleRepository, redisClient *cache.RedisClient) *AuthService {
 	return &AuthService{
 		cfg:         cfg,
 		userRepo:    userRepo,
 		tokenRepo:   tokenRepo,
 		auditRepo:   auditRepo,
 		appRepo:     appRepo,
+		roleRepo:    roleRepo,
 		redisClient: redisClient,
 	}
+}
+
+// roleInfo mengambil label dan can_access_admin dari DB dengan fallback
+func (s *AuthService) roleInfo(roleName string) (label string, canAccessAdmin bool) {
+	if r, err := s.roleRepo.FindByName(roleName); err == nil {
+		return r.Label, r.CanAccessAdmin
+	}
+	return roleName, false
 }
 
 type RegisterInput struct {
@@ -199,7 +210,8 @@ func (s *AuthService) GetMe(userID string) (*models.UserResponse, error) {
 		return nil, errors.New("user not found")
 	}
 
-	resp := user.ToResponse()
+	label, canAdmin := s.roleInfo(user.Role)
+	resp := user.ToResponseWithLabel(label, canAdmin)
 	return &resp, nil
 }
 
@@ -250,10 +262,11 @@ func (s *AuthService) generateTokens(user *models.User, userAgent, ipAddress str
 		return nil, errors.New("failed to store refresh token")
 	}
 
+	label, canAdmin := s.roleInfo(user.Role)
 	return &AuthResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		User:         user.ToResponse(),
+		User:         user.ToResponseWithLabel(label, canAdmin),
 	}, nil
 }
 
@@ -298,16 +311,32 @@ func (s *AuthService) SeedAdmin(name, email, password string) error {
 }
 
 func (s *AuthService) SeedAppsAndAssignAdmin(adminEmail string) error {
+	// Build allowed_roles JSON from all roles in DB
+	allRolesJSON := `["admin","manager","staff"]` // fallback
+	if roles, err := s.roleRepo.FindAll(); err == nil && len(roles) > 0 {
+		names := make([]string, 0, len(roles))
+		for _, r := range roles {
+			names = append(names, r.Name)
+		}
+		if b, err := json.Marshal(names); err == nil {
+			allRolesJSON = string(b)
+		}
+	}
+
 	appsToSeed := []models.App{
-		{Name: "Cost Control", Description: "Project Cost Management", Icon: "📊", BaseURL: s.cfg.AppURLCostControl},
-		{Name: "Procurement", Description: "Purchase Orders & Vendors", Icon: "🛒", BaseURL: s.cfg.AppURLProcurement},
-		{Name: "Invoice", Description: "Billing & Invoicing", Icon: "🧾", BaseURL: s.cfg.AppURLInvoice},
+		{Name: "Cost Control", Description: "Project Cost Management", Icon: "📊", BaseURL: s.cfg.AppURLCostControl, AllowedRoles: allRolesJSON},
+		{Name: "Procurement", Description: "Purchase Orders & Vendors", Icon: "🛒", BaseURL: s.cfg.AppURLProcurement, AllowedRoles: allRolesJSON},
+		{Name: "Invoice", Description: "Billing & Invoicing", Icon: "🧾", BaseURL: s.cfg.AppURLInvoice, AllowedRoles: allRolesJSON},
 	}
 
 	for _, app := range appsToSeed {
 		existing, _ := s.appRepo.FindByName(app.Name)
 		if existing == nil || existing.ID == "" {
 			_ = s.appRepo.Create(&app)
+		} else {
+			// Update allowed_roles for existing apps so they reflect current roles
+			existing.AllowedRoles = allRolesJSON
+			_ = s.appRepo.Update(existing)
 		}
 	}
 

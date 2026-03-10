@@ -60,8 +60,8 @@ export function Navbar() {
                                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                                     {user?.name || "User"}
                                 </p>
-                                <p className="text-xs text-slate-500 capitalize">
-                                    {user?.role || "—"}
+                                <p className="text-xs text-slate-500">
+                                    {user?.role_label || user?.role || "—"}
                                 </p>
                             </div>
                             <Avatar>
