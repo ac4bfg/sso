@@ -4,6 +4,7 @@ import {
     Users,
     AppWindow,
     ShieldCheck,
+    Activity,
 } from "lucide-react"
 
 export interface MenuItem {
@@ -37,6 +38,12 @@ export const MENU_ITEMS: MenuItem[] = [
         label: "Roles",
         icon: ShieldCheck,
         href: "/admin/roles",
+        color: "text-primary",
+    },
+    {
+        label: "Activity Logs",
+        icon: Activity,
+        href: "/admin/logs",
         color: "text-primary",
     },
 ]

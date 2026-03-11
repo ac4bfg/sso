@@ -38,6 +38,8 @@ func main() {
 	auditRepo := repositories.NewAuditRepository(database.DB)
 	appRepo := repositories.NewAppRepository(database.DB)
 	roleRepo := repositories.NewRoleRepository(database.DB)
+	notifRepo := repositories.NewNotificationRepository(database.DB)
+	accessRequestRepo := repositories.NewAccessRequestRepository(database.DB)
 
 	go func() {
 		if err := tokenRepo.DeleteExpired(); err == nil {
@@ -74,11 +76,13 @@ func main() {
 		log.Println("✅ Apps seed checked")
 	}
 
-	authHandler := handlers.NewAuthHandler(authService, oauthService, auditRepo, cfg)
+	authHandler := handlers.NewAuthHandler(authService, oauthService, auditRepo, notifRepo, cfg)
 	sessionHandler := handlers.NewSessionHandler(tokenRepo, redisClient)
 	userHandler := handlers.NewUserHandler(userService, auditRepo)
 	appHandler := handlers.NewAppHandler(appService)
 	roleHandler := handlers.NewRoleHandler(roleService)
+	notifHandler := handlers.NewNotificationHandler(notifRepo)
+	accessRequestHandler := handlers.NewAccessRequestHandler(accessRequestRepo, notifRepo, userService, userRepo)
 
 	app := fiber.New(fiber.Config{
 		AppName:      "Cost Control SSO",
@@ -168,6 +172,7 @@ func main() {
 	users.Use(middleware.AuthMiddleware(cfg, redisClient, tokenRepo))
 	users.Use(middleware.AdminAccessMiddleware(roleRepo))
 	users.Get("/", userHandler.GetAll)
+	users.Post("/", userHandler.Create)
 	users.Get("/:id", userHandler.GetByID)
 	users.Put("/:id", userHandler.Update)
 	users.Delete("/:id", userHandler.Delete)
@@ -192,6 +197,23 @@ func main() {
 	userSelf.Get("/login-stats", userHandler.GetLoginStats)
 	userSelf.Put("/profile", userHandler.UpdateProfile)
 	userSelf.Put("/password", userHandler.ChangePassword)
+
+	adminGroup := api.Group("/admin")
+	adminGroup.Use(middleware.AuthMiddleware(cfg, redisClient, tokenRepo))
+	adminGroup.Use(middleware.AdminAccessMiddleware(roleRepo))
+	adminGroup.Get("/activity", userHandler.GetRecentActivity)
+	adminGroup.Get("/logs", userHandler.GetLogs)
+	adminGroup.Get("/notifications", notifHandler.GetAll)
+	adminGroup.Get("/notifications/stream", notifHandler.Stream)
+	adminGroup.Post("/notifications/read-all", notifHandler.MarkAllRead)
+	adminGroup.Post("/notifications/:id/read", notifHandler.MarkRead)
+	adminGroup.Get("/requests", accessRequestHandler.GetAll)
+	adminGroup.Post("/requests/:id/approve", accessRequestHandler.Approve)
+	adminGroup.Post("/requests/:id/reject", accessRequestHandler.Reject)
+
+	// Public: submit + check email (no auth)
+	api.Get("/access-requests/check", accessRequestHandler.CheckEmail)
+	api.Post("/access-requests", accessRequestHandler.Submit)
 
 	log.Printf("🚀 Server running on :%s", cfg.Port)
 	if err := app.Listen(":" + cfg.Port); err != nil {

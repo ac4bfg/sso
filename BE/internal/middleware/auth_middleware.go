@@ -17,17 +17,21 @@ import (
 // AuthMiddleware memeriksa JWT access token di header Authorization
 func AuthMiddleware(cfg *config.Config, redisClient *cache.RedisClient, tokenRepo *repositories.TokenRepository) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		authHeader := c.Get("Authorization")
-		if authHeader == "" {
-			return response.Error(c, fiber.StatusUnauthorized, "Token not found", nil)
+		// Support token from query param for SSE (EventSource can't set headers)
+		var tokenString string
+		if qt := c.Query("token"); qt != "" {
+			tokenString = qt
+		} else {
+			authHeader := c.Get("Authorization")
+			if authHeader == "" {
+				return response.Error(c, fiber.StatusUnauthorized, "Token not found", nil)
+			}
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				return response.Error(c, fiber.StatusUnauthorized, "Invalid token format", nil)
+			}
+			tokenString = parts[1]
 		}
-
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			return response.Error(c, fiber.StatusUnauthorized, "Invalid token format", nil)
-		}
-
-		tokenString := parts[1]
 
 		claims, err := jwtPkg.ValidateToken(tokenString, cfg.JWTSecret)
 		if err != nil {

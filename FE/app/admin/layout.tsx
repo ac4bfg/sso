@@ -11,7 +11,20 @@ import { toast } from "@/components/ui/sonner"
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const { user, isAuthenticated, isLoading } = useAuth()
     const router = useRouter()
-    const [isCollapsed, setIsCollapsed] = useState(false)
+    const [isCollapsed, setIsCollapsed] = useState(() => {
+        if (typeof window !== "undefined") {
+            return localStorage.getItem("sidebar_collapsed") === "true"
+        }
+        return false
+    })
+
+    const handleToggle = () => {
+        setIsCollapsed(prev => {
+            const next = !prev
+            localStorage.setItem("sidebar_collapsed", String(next))
+            return next
+        })
+    }
 
     useEffect(() => {
         if (!isLoading && !isAuthenticated) {
@@ -48,7 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="h-screen flex overflow-hidden bg-background">
             {/* Sidebar */}
             <div className={`hidden md:flex flex-col transition-all duration-300 ${isCollapsed ? "w-20" : "w-72"}`}>
-                <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
+                <Sidebar isCollapsed={isCollapsed} onToggle={handleToggle} />
             </div>
 
             {/* Main Content */}

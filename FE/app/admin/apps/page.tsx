@@ -10,7 +10,8 @@ import {
     ExternalLink,
     Plus,
     Pencil,
-    Trash2,
+    PowerOff,
+    Power,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +28,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { toast } from "@/components/ui/sonner"
 import api from "@/lib/api"
 
@@ -62,7 +64,7 @@ function parseAllowedRoles(raw: string | string[]): string[] {
     try { return JSON.parse(raw) } catch { return [] }
 }
 
-const emptyForm = { name: "", description: "", icon: "", base_url: "", allowed_roles: [] as string[] }
+const emptyForm = { name: "", description: "", icon: "", base_url: "", is_active: true, allowed_roles: [] as string[] }
 
 export default function AppsPage() {
     const [apps, setApps] = useState<App[]>([])
@@ -76,8 +78,6 @@ export default function AppsPage() {
     const [form, setForm] = useState(emptyForm)
     const [saving, setSaving] = useState(false)
 
-    const [deleteConfirm, setDeleteConfirm] = useState<App | null>(null)
-    const [deleting, setDeleting] = useState(false)
 
     const fetchApps = async () => {
         try {
@@ -124,9 +124,20 @@ export default function AppsPage() {
             description: app.description || "",
             icon: app.icon || "",
             base_url: app.base_url,
+            is_active: app.is_active,
             allowed_roles: [...app.allowed_roles],
         })
         setDialogOpen(true)
+    }
+
+    const handleToggleActive = async (app: App) => {
+        try {
+            await api.put(`/apps/${app.id}`, { is_active: !app.is_active })
+            toast.success(app.is_active ? `"${app.name}" disabled` : `"${app.name}" enabled`)
+            await fetchApps()
+        } catch {
+            toast.error("Failed to update application status")
+        }
     }
 
     const toggleRole = (roleName: string) => {
@@ -146,10 +157,12 @@ export default function AppsPage() {
         setSaving(true)
         try {
             if (editApp) {
-                await api.put(`/apps/${editApp.id}`, form)
+                await api.put(`/apps/${editApp.id}`, { ...form, is_active: form.is_active })
                 toast.success("Application updated")
             } else {
-                await api.post("/apps", form)
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { is_active: _, ...createPayload } = form
+                await api.post("/apps", createPayload)
                 toast.success("Application created")
             }
             setDialogOpen(false)
@@ -158,21 +171,6 @@ export default function AppsPage() {
             toast.error("Failed to save application")
         } finally {
             setSaving(false)
-        }
-    }
-
-    const handleDelete = async () => {
-        if (!deleteConfirm) return
-        setDeleting(true)
-        try {
-            await api.delete(`/apps/${deleteConfirm.id}`)
-            toast.success("Application deactivated")
-            setDeleteConfirm(null)
-            await fetchApps()
-        } catch {
-            toast.error("Failed to deactivate application")
-        } finally {
-            setDeleting(false)
         }
     }
 
@@ -243,23 +241,37 @@ export default function AppsPage() {
                         <Card key={app.id} className="border shadow-none hover:border-primary/40 hover:shadow-sm transition-all group">
                             <CardContent className="p-5">
                                 <div className="flex items-start justify-between gap-3">
-                                    <div className="text-3xl w-12 h-12 flex items-center justify-center rounded-xl bg-muted group-hover:bg-primary/10 transition-colors">
+                                    <div className={`text-3xl w-12 h-12 flex items-center justify-center rounded-xl transition-colors ${app.is_active ? "bg-muted group-hover:bg-primary/10" : "bg-muted/50 opacity-60"}`}>
                                         {app.icon || "🚀"}
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant={app.is_active ? "default" : "secondary"} className="text-xs shrink-0">
-                                            {app.is_active ? "Active" : "Inactive"}
-                                        </Badge>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => openEdit(app)}>
+                                    <div className="flex items-center gap-1.5">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() => openEdit(app)}
+                                            title="Edit"
+                                        >
                                             <Pencil className="h-3.5 w-3.5" />
                                         </Button>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive" onClick={() => setDeleteConfirm(app)}>
-                                            <Trash2 className="h-3.5 w-3.5" />
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className={`h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity ${app.is_active ? "text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" : "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"}`}
+                                            onClick={() => handleToggleActive(app)}
+                                            title={app.is_active ? "Disable" : "Enable"}
+                                        >
+                                            {app.is_active ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
                                         </Button>
                                     </div>
                                 </div>
-                                <div className="mt-3">
-                                    <p className="font-semibold text-sm">{app.name}</p>
+                                <div className="mt-2">
+                                    <Badge variant={app.is_active ? "default" : "secondary"} className="text-xs">
+                                        {app.is_active ? "Active" : "Inactive"}
+                                    </Badge>
+                                </div>
+                                <div className="mt-2">
+                                    <p className={`font-semibold text-sm ${!app.is_active ? "text-muted-foreground" : ""}`}>{app.name}</p>
                                     {app.description && (
                                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{app.description}</p>
                                     )}
@@ -318,6 +330,18 @@ export default function AppsPage() {
                             <Label htmlFor="app-url">Base URL <span className="text-destructive">*</span></Label>
                             <Input id="app-url" value={form.base_url} onChange={(e) => setForm((f) => ({ ...f, base_url: e.target.value }))} placeholder="https://app.example.com" />
                         </div>
+                        {editApp && (
+                            <div className="flex items-center justify-between py-1">
+                                <div>
+                                    <Label>Status</Label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">Application can be accessed by users</p>
+                                </div>
+                                <Switch
+                                    checked={form.is_active}
+                                    onCheckedChange={(v) => setForm((f) => ({ ...f, is_active: v }))}
+                                />
+                            </div>
+                        )}
                         <div className="space-y-1.5">
                             <Label>Allowed Roles</Label>
                             <div className="flex flex-wrap gap-2 p-3 rounded-md border bg-background min-h-10">
@@ -353,23 +377,6 @@ export default function AppsPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* Delete Confirm Dialog */}
-            <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
-                <DialogContent className="sm:max-w-sm">
-                    <DialogHeader>
-                        <DialogTitle>Deactivate Application</DialogTitle>
-                    </DialogHeader>
-                    <p className="text-sm text-muted-foreground">
-                        Are you sure you want to deactivate <span className="font-medium text-foreground">{deleteConfirm?.name}</span>? Users will no longer be able to access it.
-                    </p>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
-                        <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-                            {deleting ? "Deactivating..." : "Deactivate"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     )
 }

@@ -20,6 +20,13 @@ func NewUserService(userRepo *repositories.UserRepository, appRepo *repositories
 	return &UserService{userRepo: userRepo, appRepo: appRepo, roleRepo: roleRepo}
 }
 
+type CreateUserInput struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
+}
+
 type UpdateUserInput struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
@@ -41,6 +48,51 @@ func (s *UserService) roleInfo(roleName string) (label string, canAccessAdmin bo
 		return r.Label, r.CanAccessAdmin
 	}
 	return roleName, false
+}
+
+// Create membuat user baru oleh admin
+func (s *UserService) Create(input CreateUserInput) (*models.UserResponse, error) {
+	if input.Name == "" || input.Email == "" || input.Password == "" {
+		return nil, errors.New("name, email, and password are required")
+	}
+
+	// Cek email sudah terdaftar
+	existing, _ := s.userRepo.FindByEmail(input.Email)
+	if existing != nil {
+		return nil, errors.New("email already registered")
+	}
+
+	// Validasi role jika diisi
+	role := input.Role
+	if role == "" {
+		role = "staff"
+	} else {
+		if _, err := s.roleRepo.FindByName(role); err != nil {
+			return nil, errors.New("invalid role: role not found")
+		}
+	}
+
+	hashed, err := hash.HashPassword(input.Password)
+	if err != nil {
+		return nil, errors.New("failed to hash password")
+	}
+
+	user := &models.User{
+		Name:          input.Name,
+		Email:         input.Email,
+		Password:      hashed,
+		Role:          role,
+		IsActive:      true,
+		IsPasswordSet: true,
+	}
+
+	if err := s.userRepo.Create(user); err != nil {
+		return nil, errors.New("failed to create user")
+	}
+
+	label, canAdmin := s.roleInfo(user.Role)
+	resp := user.ToResponseWithLabel(label, canAdmin)
+	return &resp, nil
 }
 
 // GetAll mengambil semua user

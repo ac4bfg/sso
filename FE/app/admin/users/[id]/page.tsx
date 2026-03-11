@@ -13,8 +13,14 @@ import {
     CheckCircle2,
     XCircle,
     ChevronDown,
+    Pencil,
+    Check,
+    X,
+    Eye,
+    EyeOff,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
     Card,
@@ -23,6 +29,14 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -89,6 +103,16 @@ const roleColors: Record<string, string> = {
     staff: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
 }
 
+function pwValidations(password: string) {
+    return {
+        length: password.length >= 8,
+        uppercase: /[A-Z]/.test(password),
+        lowercase: /[a-z]/.test(password),
+        number: /[0-9]/.test(password),
+        special: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+    }
+}
+
 export default function UserDetailPage() {
     const params = useParams()
     const router = useRouter()
@@ -99,6 +123,22 @@ export default function UserDetailPage() {
     const [allApps, setAllApps] = useState<App[]>([])
     const [allRoles, setAllRoles] = useState<Role[]>([])
     const [isLoading, setIsLoading] = useState(true)
+
+    // Inline edit: name
+    const [editingName, setEditingName] = useState(false)
+    const [nameInput, setNameInput] = useState("")
+    const [savingName, setSavingName] = useState(false)
+
+    // Inline edit: email
+    const [editingEmail, setEditingEmail] = useState(false)
+    const [emailInput, setEmailInput] = useState("")
+    const [savingEmail, setSavingEmail] = useState(false)
+
+    // Reset password dialog
+    const [resetPwOpen, setResetPwOpen] = useState(false)
+    const [newPassword, setNewPassword] = useState("")
+    const [showPassword, setShowPassword] = useState(false)
+    const [savingPassword, setSavingPassword] = useState(false)
 
     const fetchData = async () => {
         try {
@@ -154,6 +194,60 @@ export default function UserDetailPage() {
         }
     }
 
+    const handleSaveName = async () => {
+        if (!nameInput.trim() || nameInput.trim() === user?.name) {
+            setEditingName(false)
+            return
+        }
+        setSavingName(true)
+        try {
+            await api.put(`/users/${userId}`, { name: nameInput.trim() })
+            toast.success("Name updated successfully")
+            fetchData()
+            setEditingName(false)
+        } catch {
+            toast.error("Failed to update name")
+        } finally {
+            setSavingName(false)
+        }
+    }
+
+    const handleSaveEmail = async () => {
+        if (!emailInput.trim() || emailInput.trim() === user?.email) {
+            setEditingEmail(false)
+            return
+        }
+        setSavingEmail(true)
+        try {
+            await api.put(`/users/${userId}`, { email: emailInput.trim() })
+            toast.success("Email updated successfully")
+            fetchData()
+            setEditingEmail(false)
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+            toast.error(msg || "Failed to update email")
+        } finally {
+            setSavingEmail(false)
+        }
+    }
+
+    const handleResetPassword = async () => {
+        const v = pwValidations(newPassword)
+        if (!Object.values(v).every(Boolean)) return
+        setSavingPassword(true)
+        try {
+            await api.put(`/users/${userId}`, { password: newPassword })
+            toast.success("Password reset successfully")
+            setResetPwOpen(false)
+            setNewPassword("")
+            fetchData()
+        } catch {
+            toast.error("Failed to reset password")
+        } finally {
+            setSavingPassword(false)
+        }
+    }
+
     const formatDate = (dateStr: string | null) => {
         if (!dateStr) return "Never"
         return new Date(dateStr).toLocaleDateString("id-ID", {
@@ -171,6 +265,9 @@ export default function UserDetailPage() {
     const unassignedApps = allApps.filter(
         (app) => !userApps.some((ua) => ua.id === app.id)
     )
+
+    const pwChecks = pwValidations(newPassword)
+    const isPwValid = Object.values(pwChecks).every(Boolean)
 
     if (isLoading) {
         return (
@@ -208,6 +305,58 @@ export default function UserDetailPage() {
                 </div>
             </div>
 
+            {/* Reset Password Dialog */}
+            <Dialog open={resetPwOpen} onOpenChange={(open) => { setResetPwOpen(open); if (!open) { setNewPassword(""); setShowPassword(false) } }}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Reset Password</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <Label htmlFor="reset-pw">New Password</Label>
+                        <div className="relative">
+                            <Input
+                                id="reset-pw"
+                                type={showPassword ? "text" : "password"}
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                placeholder="Min. 8 characters"
+                                className="pr-9"
+                                autoFocus
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(v => !v)}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                tabIndex={-1}
+                            >
+                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                        </div>
+                        {newPassword.length > 0 && (
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                                {([
+                                    { key: "length", label: "8+ chars" },
+                                    { key: "uppercase", label: "Uppercase" },
+                                    { key: "lowercase", label: "Lowercase" },
+                                    { key: "number", label: "Number" },
+                                    { key: "special", label: "Special" },
+                                ] as const).map(({ key, label }) => (
+                                    <span key={key} className={pwChecks[key] ? "text-green-600 font-medium" : "text-muted-foreground"}>
+                                        {pwChecks[key] ? "✓" : "○"} {label}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setResetPwOpen(false)}>Cancel</Button>
+                        <Button onClick={handleResetPassword} disabled={savingPassword || !isPwValid}>
+                            {savingPassword ? "Saving..." : "Reset Password"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left: User Profile */}
                 <div className="space-y-4">
@@ -219,10 +368,78 @@ export default function UserDetailPage() {
                                         {initials(user.name)}
                                     </AvatarFallback>
                                 </Avatar>
-                                <div>
-                                    <p className="font-semibold text-lg">{user.name}</p>
-                                    <p className="text-sm text-muted-foreground">{user.email}</p>
+
+                                <div className="w-full space-y-1">
+                                    {/* Editable Name */}
+                                    {editingName ? (
+                                        <div className="relative flex items-center">
+                                            <Input
+                                                className="h-8 text-sm text-center font-semibold pr-16"
+                                                value={nameInput}
+                                                onChange={(e) => setNameInput(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") handleSaveName()
+                                                    if (e.key === "Escape") setEditingName(false)
+                                                }}
+                                                autoFocus
+                                            />
+                                            <div className="absolute right-1 flex items-center gap-0.5">
+                                                <Button size="icon" variant="ghost" className="h-6 w-6 text-green-600 hover:text-green-700" onClick={handleSaveName} disabled={savingName}>
+                                                    <Check className="h-3.5 w-3.5" />
+                                                </Button>
+                                                <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground" onClick={() => setEditingName(false)}>
+                                                    <X className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-center gap-1.5 group/name">
+                                            <p className="font-semibold text-lg">{user.name}</p>
+                                            <button
+                                                className="opacity-0 group-hover/name:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
+                                                onClick={() => { setNameInput(user.name); setEditingName(true) }}
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Editable Email */}
+                                    {editingEmail ? (
+                                        <div className="relative flex items-center">
+                                            <Input
+                                                type="email"
+                                                className="h-7 text-xs text-center pr-14"
+                                                value={emailInput}
+                                                onChange={(e) => setEmailInput(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") handleSaveEmail()
+                                                    if (e.key === "Escape") setEditingEmail(false)
+                                                }}
+                                                autoFocus
+                                            />
+                                            <div className="absolute right-1 flex items-center gap-0.5">
+                                                <Button size="icon" variant="ghost" className="h-5 w-5 text-green-600 hover:text-green-700" onClick={handleSaveEmail} disabled={savingEmail}>
+                                                    <Check className="h-3 w-3" />
+                                                </Button>
+                                                <Button size="icon" variant="ghost" className="h-5 w-5 text-muted-foreground" onClick={() => setEditingEmail(false)}>
+                                                    <X className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-center gap-1.5 group/email">
+                                            <p className="text-sm text-muted-foreground">{user.email}</p>
+                                            <button
+                                                className="opacity-0 group-hover/email:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
+                                                onClick={() => { setEmailInput(user.email); setEditingEmail(true) }}
+                                            >
+                                                <Pencil className="h-3 w-3" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
+
                                 <span className={`text-xs px-3 py-1 rounded-full font-medium ${roleColors[user.role] || roleColors.staff}`}>
                                     {user.role_label || user.role}
                                 </span>
@@ -245,9 +462,19 @@ export default function UserDetailPage() {
                                         <Key className="h-4 w-4" />
                                         Password
                                     </span>
-                                    <span className="text-xs font-medium">
-                                        {user.is_password_set ? "Set" : "Not set"}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-medium">
+                                            {user.is_password_set ? "Set" : "Not set"}
+                                        </span>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 text-xs px-2"
+                                            onClick={() => setResetPwOpen(true)}
+                                        >
+                                            Reset
+                                        </Button>
+                                    </div>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-muted-foreground flex items-center gap-2">

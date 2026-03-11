@@ -299,10 +299,10 @@ const LoginContent = () => {
                     <p className="px-8 text-center text-sm text-muted-foreground animate-in fade-in duration-700 delay-500">
                         Don&apos;t have an account?{" "}
                         <Link
-                            href="#"
+                            href="/request-access"
                             className="underline underline-offset-4 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
                         >
-                            Contact Admin
+                            Request Access
                         </Link>
                     </p>
                 </div >

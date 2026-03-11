@@ -1,21 +1,34 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
     Loader2, AppWindow, ExternalLink, Globe, Shield,
     Clock, User, Layers, ArrowRight, Sparkles,
     LogIn, LogOut, UserPlus, RefreshCw, AlertCircle,
-    CheckCircle2, XCircle,
+    CheckCircle2, XCircle, CalendarIcon,
+    Sun, Coffee, Moon,
 } from "lucide-react"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
+import { type DateRange } from "react-day-picker"
+import { format, subDays } from "date-fns"
 import { useAuth } from "@/lib/auth-context"
+import { cn } from "@/lib/utils"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Navbar } from "@/components/layout/navbar"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "@/components/ui/sonner"
+
+function toYMD(d: Date) {
+    return format(d, "yyyy-MM-dd")
+}
+function defaultRange(): DateRange {
+    return { from: subDays(new Date(), 6), to: new Date() }
+}
 
 interface AppWithRole {
     id: string; name: string; description: string
@@ -24,17 +37,19 @@ interface AppWithRole {
 interface AuditLog {
     id: string; event_type: string; success: boolean
     ip_address: string; created_at: string
+    user_name?: string; email?: string
 }
 interface LoginStat {
     date: string; success: number; failed: number
 }
 
-function getGreeting() {
-    const h = new Date().getHours()
-    if (h < 11) return "Selamat pagi"
-    if (h < 15) return "Selamat siang"
-    if (h < 18) return "Selamat sore"
-    return "Selamat malam"
+function getGreeting(name = "") {
+    const h = new Date().getHours();
+    const user = name ? ` ${name}` : "";
+    
+    if (h < 12) return { text: `Good morning${user}!`, icon: <Sun className="h-4 w-4" /> };
+    if (h < 18) return { text: `Good afternoon${user}!`, icon: <Coffee className="h-4 w-4" /> };
+    return { text: `Good evening${user}!`, icon: <Moon className="h-4 w-4" /> };
 }
 
 function formatLastLogin(dateStr: string | null) {
@@ -89,13 +104,61 @@ const eventIcons: Record<string, React.ReactNode> = {
 export default function DashboardPage() {
     const { user, isAuthenticated, isLoading } = useAuth()
     const router = useRouter()
-    const [isCollapsed, setIsCollapsed] = useState(false)
+    const [isCollapsed, setIsCollapsed] = useState(() => {
+        if (typeof window !== "undefined") {
+            return localStorage.getItem("sidebar_collapsed") === "true"
+        }
+        return false
+    })
+
+    const handleToggle = () => {
+        setIsCollapsed(prev => {
+            const next = !prev
+            localStorage.setItem("sidebar_collapsed", String(next))
+            return next
+        })
+    }
     const [apps, setApps] = useState<AppWithRole[]>([])
     const [appsLoading, setAppsLoading] = useState(true)
     const [activity, setActivity] = useState<AuditLog[]>([])
     const [activityLoading, setActivityLoading] = useState(true)
     const [loginStats, setLoginStats] = useState<LoginStat[]>([])
+    const [statsLoading, setStatsLoading] = useState(true)
     const [currentTime, setCurrentTime] = useState(new Date())
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(defaultRange)
+    const [hiddenSeries, setHiddenSeries] = useState<string[]>([])
+    const [exitingSeries, setExitingSeries] = useState<string[]>([])
+
+    const toggleSeries = (dataKey: string) => {
+        if (hiddenSeries.includes(dataKey)) {
+            setHiddenSeries(prev => prev.filter(k => k !== dataKey))
+            return
+        }
+        if (exitingSeries.includes(dataKey)) {
+            setExitingSeries(prev => prev.filter(k => k !== dataKey))
+            return
+        }
+        setExitingSeries(prev => [...prev, dataKey])
+        setTimeout(() => {
+            setExitingSeries(prev => {
+                if (prev.includes(dataKey)) {
+                    setHiddenSeries(prevHidden => [...prevHidden, dataKey])
+                    return prev.filter(k => k !== dataKey)
+                }
+                return prev
+            })
+        }, 500)
+    }
+
+    const animatedChartData = useMemo(() =>
+        loginStats.map(s => ({
+            ...s,
+            date: new Date(s.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+            success: exitingSeries.includes("success") ? 0 : s.success,
+            failed: exitingSeries.includes("failed") ? 0 : s.failed,
+        })),
+        [loginStats, exitingSeries]
+    )
 
     useEffect(() => {
         if (!isLoading && !isAuthenticated) router.replace("/login")
@@ -108,6 +171,19 @@ export default function DashboardPage() {
         }
     }, [isAuthenticated, user])
 
+    const fetchStats = useCallback(() => {
+        const token = localStorage.getItem("access_token")
+        if (!token || !dateRange?.from || !dateRange?.to) return
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081/api"
+        setStatsLoading(true)
+        fetch(`${apiUrl}/user/login-stats?from=${toYMD(dateRange.from)}&to=${toYMD(dateRange.to)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then(r => r.json()).then(d => setLoginStats(d.data || []))
+            .catch(() => {})
+            .finally(() => setStatsLoading(false))
+    }, [dateRange])
+
     useEffect(() => {
         if (!isAuthenticated) return
         const token = localStorage.getItem("access_token")
@@ -119,14 +195,15 @@ export default function DashboardPage() {
             .then(r => r.json()).then(d => setApps(d.data || []))
             .catch(() => {}).finally(() => setAppsLoading(false))
 
-        fetch(`${apiUrl}/user/activity`, { headers: h })
+        const activityUrl = user?.can_access_admin ? `${apiUrl}/admin/activity` : `${apiUrl}/user/activity`
+        fetch(activityUrl, { headers: h })
             .then(r => r.json()).then(d => setActivity(d.data || []))
             .catch(() => {}).finally(() => setActivityLoading(false))
-
-        fetch(`${apiUrl}/user/login-stats`, { headers: h })
-            .then(r => r.json()).then(d => setLoginStats(d.data || []))
-            .catch(() => {})
     }, [isAuthenticated])
+
+    useEffect(() => {
+        if (isAuthenticated) fetchStats()
+    }, [isAuthenticated, fetchStats])
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 60000)
@@ -146,7 +223,7 @@ export default function DashboardPage() {
     return (
         <div className="h-screen flex overflow-hidden bg-background">
             <div className={`hidden md:flex flex-col transition-all duration-300 ${isCollapsed ? "w-20" : "w-72"}`}>
-                <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
+                <Sidebar isCollapsed={isCollapsed} onToggle={handleToggle} />
             </div>
 
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -162,9 +239,9 @@ export default function DashboardPage() {
                             </div>
                             <div className="relative flex items-start justify-between gap-4">
                                 <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Sparkles className="h-4 w-4 opacity-80" />
-                                        <span className="text-sm opacity-80">{getGreeting()}</span>
+                                    <div className="flex items-center gap-2 mb-1 opacity-80">
+                                        {getGreeting().icon}
+                                        <span className="text-sm">{getGreeting().text}</span>
                                     </div>
                                     <h1 className="text-2xl font-bold">{user?.name}</h1>
                                     <p className="text-sm opacity-75 mt-1">{user?.email}</p>
@@ -252,36 +329,98 @@ export default function DashboardPage() {
 
                             {/* Login Activity Chart */}
                             <div className="lg:col-span-2">
-                                <Card className="border shadow-none h-full">
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                                            <LogIn className="h-4 w-4 text-primary" />
-                                            Aktivitas Login (7 Hari Terakhir)
-                                        </CardTitle>
-                                        <p className="text-xs text-muted-foreground">Login sukses & gagal di seluruh sistem</p>
+                                <Card>
+                                    <CardHeader>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <CardTitle>Aktivitas Login</CardTitle>
+                                                <CardDescription>
+                                                    Login sukses & gagal
+                                                    {dateRange?.from && dateRange?.to
+                                                        ? ` · ${format(dateRange.from, "d MMM")} – ${format(dateRange.to, "d MMM yyyy")}`
+                                                        : ""}
+                                                </CardDescription>
+                                            </div>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        className="justify-start px-2.5 font-normal"
+                                                    >
+                                                        <CalendarIcon />
+                                                        {dateRange?.from ? (
+                                                            dateRange.to ? (
+                                                                <>{format(dateRange.from, "LLL dd, y")} – {format(dateRange.to, "LLL dd, y")}</>
+                                                            ) : format(dateRange.from, "LLL dd, y")
+                                                        ) : <span>Pick a date</span>}
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0 overflow-hidden rounded-lg shadow-lg" align="end">
+                                                    <Calendar
+                                                        mode="range"
+                                                        defaultMonth={dateRange?.from}
+                                                        selected={dateRange}
+                                                        onSelect={setDateRange}
+                                                        numberOfMonths={2}
+                                                        disabled={{ after: new Date() }}
+                                                        autoFocus
+                                                    />
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
                                     </CardHeader>
-                                    <CardContent className="pt-2">
-                                        {loginStats.length === 0 ? (
-                                            <div className="h-40 flex items-center justify-center text-muted-foreground text-xs">
-                                                Belum ada data aktivitas login
+                                    <CardContent className="pl-2">
+                                        {statsLoading ? (
+                                            <div className="h-[200px] flex items-center justify-center">
+                                                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                            </div>
+                                        ) : loginStats.length === 0 ? (
+                                            <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
+                                                Belum ada data di rentang ini
                                             </div>
                                         ) : (
-                                            <ResponsiveContainer width="100%" height={160}>
-                                                <BarChart data={loginStats.map(s => ({
-                                                    ...s,
-                                                    date: new Date(s.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })
-                                                }))} barSize={14} barGap={4}>
-                                                    <XAxis dataKey="date" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                                                    <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={24} allowDecimals={false} />
-                                                    <Tooltip
-                                                        contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", color: "hsl(var(--foreground))" }}
-                                                        labelStyle={{ fontWeight: 600, marginBottom: 4 }}
-                                                        cursor={{ fill: "hsl(var(--muted))", radius: 4 }}
-                                                    />
-                                                    <Bar dataKey="success" name="Berhasil" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                                                    <Bar dataKey="failed" name="Gagal" fill="hsl(var(--destructive) / 0.5)" radius={[4, 4, 0, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                            <div className="h-[200px]">
+                                                <ResponsiveContainer width="100%" height="100%" debounce={300}>
+                                                    <BarChart data={animatedChartData}>
+                                                        <XAxis dataKey="date" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                                                        <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} width={28} allowDecimals={false} />
+                                                        <Tooltip
+                                                            contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
+                                                        />
+                                                        <Legend
+                                                            onClick={(e) => toggleSeries(e.dataKey as string)}
+                                                            wrapperStyle={{ cursor: "pointer" }}
+                                                            formatter={(value, entry: any) => {
+                                                                const isHidden = hiddenSeries.includes(entry.dataKey) || exitingSeries.includes(entry.dataKey)
+                                                                return (
+                                                                    <span className={cn("text-sm font-medium", isHidden ? "text-muted-foreground/40" : "text-slate-700 dark:text-slate-200")}>
+                                                                        {value}
+                                                                    </span>
+                                                                )
+                                                            }}
+                                                            // @ts-ignore
+                                                            payload={[
+                                                                {
+                                                                    value: "Berhasil",
+                                                                    type: "rect",
+                                                                    id: "success",
+                                                                    dataKey: "success",
+                                                                    color: (hiddenSeries.includes("success") || exitingSeries.includes("success")) ? "#e2e8f0" : "#4ade80",
+                                                                },
+                                                                {
+                                                                    value: "Gagal",
+                                                                    type: "rect",
+                                                                    id: "failed",
+                                                                    dataKey: "failed",
+                                                                    color: (hiddenSeries.includes("failed") || exitingSeries.includes("failed")) ? "#e2e8f0" : "#f87171",
+                                                                },
+                                                            ]}
+                                                        />
+                                                        <Bar dataKey="success" name="Berhasil" fill="#4ade80" radius={[4, 4, 0, 0]} animationDuration={500} hide={hiddenSeries.includes("success")} />
+                                                        <Bar dataKey="failed" name="Gagal" fill="#f87171" radius={[4, 4, 0, 0]} animationDuration={500} hide={hiddenSeries.includes("failed")} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </div>
                                         )}
                                     </CardContent>
                                 </Card>
@@ -289,50 +428,56 @@ export default function DashboardPage() {
 
                             {/* Activity Feed */}
                             <div>
-                                <Card className="border shadow-none h-full">
+                                <Card className="border shadow-none">
                                     <CardHeader className="pb-2">
                                         <CardTitle className="text-sm font-semibold flex items-center gap-2">
                                             <Clock className="h-4 w-4 text-primary" />
-                                            Aktivitas Saya
+                                            {user?.can_access_admin ? "Aktivitas Sistem" : "Aktivitas Saya"}
                                         </CardTitle>
+                                        {user?.can_access_admin && (
+                                            <p className="text-xs text-muted-foreground">10 login terbaru dari semua user</p>
+                                        )}
                                     </CardHeader>
                                     <CardContent className="p-0">
                                         {activityLoading ? (
-                                            <div className="p-4 space-y-3">
+                                            <div className="p-4 space-y-2">
                                                 {[1, 2, 3, 4].map(i => (
                                                     <div key={i} className="flex items-center gap-3">
-                                                        <div className="w-7 h-7 rounded-full bg-muted animate-pulse shrink-0" />
+                                                        <div className="w-6 h-6 rounded-full bg-muted animate-pulse shrink-0" />
                                                         <div className="flex-1 space-y-1.5">
-                                                            <div className="h-3 bg-muted animate-pulse rounded w-3/4" />
-                                                            <div className="h-2.5 bg-muted animate-pulse rounded w-1/2" />
+                                                            <div className="h-2.5 bg-muted animate-pulse rounded w-3/4" />
+                                                            <div className="h-2 bg-muted animate-pulse rounded w-1/2" />
                                                         </div>
                                                     </div>
                                                 ))}
                                             </div>
                                         ) : activity.length === 0 ? (
-                                            <div className="text-center py-10 text-muted-foreground">
-                                                <Clock className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                                            <div className="text-center py-8 text-muted-foreground">
+                                                <Clock className="h-7 w-7 mx-auto mb-2 opacity-20" />
                                                 <p className="text-xs">Belum ada aktivitas</p>
                                             </div>
                                         ) : (
-                                            <div className="divide-y">
+                                            <div className="divide-y overflow-y-auto max-h-59">
                                                 {activity.map(log => (
-                                                    <div key={log.id} className="flex items-start gap-3 p-4">
-                                                        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${log.success ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-500 dark:bg-red-900/30 dark:text-red-400"}`}>
+                                                    <div key={log.id} className="flex items-start gap-2.5 px-4 py-2.5">
+                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${log.success ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-500 dark:bg-red-900/30 dark:text-red-400"}`}>
                                                             {log.success
-                                                                ? (eventIcons[log.event_type] ?? <CheckCircle2 className="h-3.5 w-3.5" />)
-                                                                : <XCircle className="h-3.5 w-3.5" />}
+                                                                ? (eventIcons[log.event_type] ?? <CheckCircle2 className="h-3 w-3" />)
+                                                                : <XCircle className="h-3 w-3" />}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-sm font-medium leading-snug">
+                                                            {user?.can_access_admin && log.user_name && (
+                                                                <p className="text-xs font-semibold text-foreground leading-snug truncate">{log.user_name}</p>
+                                                            )}
+                                                            <p className="text-xs font-medium leading-snug">
                                                                 {eventLabels[log.event_type] ?? log.event_type}
                                                             </p>
                                                             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                                                <span className="text-xs text-muted-foreground">{formatRelative(log.created_at)}</span>
+                                                                <span className="text-[11px] text-muted-foreground">{formatRelative(log.created_at)}</span>
                                                                 {log.ip_address && (
                                                                     <>
-                                                                        <span className="text-muted-foreground/40 text-xs">·</span>
-                                                                        <span className="text-xs text-muted-foreground font-mono">{log.ip_address}</span>
+                                                                        <span className="text-muted-foreground/40 text-[11px]">·</span>
+                                                                        <span className="text-[11px] text-muted-foreground font-mono">{log.ip_address}</span>
                                                                     </>
                                                                 )}
                                                             </div>

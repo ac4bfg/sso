@@ -20,16 +20,26 @@ type AuthHandler struct {
 	authService  *services.AuthService
 	oauthService *services.OAuthService
 	auditRepo    *repositories.AuditRepository
+	notifRepo    *repositories.NotificationRepository
 	cfg          *config.Config
 }
 
-func NewAuthHandler(authService *services.AuthService, oauthService *services.OAuthService, auditRepo *repositories.AuditRepository, cfg *config.Config) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, oauthService *services.OAuthService, auditRepo *repositories.AuditRepository, notifRepo *repositories.NotificationRepository, cfg *config.Config) *AuthHandler {
 	return &AuthHandler{
 		authService:  authService,
 		oauthService: oauthService,
 		auditRepo:    auditRepo,
+		notifRepo:    notifRepo,
 		cfg:          cfg,
 	}
+}
+
+// createNotif persists a notification and broadcasts it via SSE
+func (h *AuthHandler) createNotif(notif *models.Notification) {
+	if err := h.notifRepo.Create(notif); err != nil {
+		return
+	}
+	NotifHub.Broadcast(notif)
 }
 
 // GoogleLogin GET /api/auth/google
@@ -164,8 +174,38 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 			eventType = models.EventAccountLocked
 		}
 		h.logAudit(c, nil, input.Email, eventType, false, err.Error())
+
+		// Brute force detection: count recent failed logins from this IP
+		go func() {
+			count, countErr := h.auditRepo.CountRecentFailedByIP(ipAddress, 5)
+			if countErr == nil && count >= 5 {
+				h.createNotif(&models.Notification{
+					Type:      models.NotifBruteForce,
+					Title:     "Brute Force Attempt Detected",
+					Message:   fmt.Sprintf("%d failed login attempts from IP %s in the last 5 minutes (email: %s)", count, ipAddress, input.Email),
+					Email:     input.Email,
+					IPAddress: ipAddress,
+				})
+			}
+		}()
+
 		return response.Error(c, fiber.StatusUnauthorized, err.Error(), nil)
 	}
+
+	// New IP login detection
+	go func() {
+		isNew, checkErr := h.auditRepo.IsNewIPForUser(result.User.ID, ipAddress)
+		if checkErr == nil && isNew {
+			h.createNotif(&models.Notification{
+				Type:      models.NotifNewIPLogin,
+				Title:     "Login from New IP Address",
+				Message:   fmt.Sprintf("%s logged in from a new IP address: %s", result.User.Name, ipAddress),
+				UserName:  result.User.Name,
+				Email:     result.User.Email,
+				IPAddress: ipAddress,
+			})
+		}
+	}()
 
 	h.logAudit(c, &result.User.ID, input.Email, models.EventLoginSuccess, true, "")
 	h.setRefreshTokenCookie(c, result.RefreshToken)

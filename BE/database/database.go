@@ -57,6 +57,8 @@ func Migrate() {
 		&models.AuditLog{},
 		&models.App{},
 		&models.UserAppRole{},
+		&models.Notification{},
+		&models.AccessRequest{},
 	)
 	if err != nil {
 		log.Fatalf("❌ Gagal migrasi database SSO: %v", err)

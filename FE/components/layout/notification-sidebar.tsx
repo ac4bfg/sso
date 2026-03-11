@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Bell, Check, Trash2, X, AlertCircle, AlertTriangle, Info, CheckCircle2, Clock } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { Bell, Check, AlertCircle, AlertTriangle, Info, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     Sheet,
@@ -12,83 +13,118 @@ import {
     SheetTrigger,
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import api from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
+import { formatDistanceToNow } from "date-fns"
 
-// Mock Data
-type Notification = {
-    id: number
+interface Notification {
+    id: string
+    type: string
     title: string
-    description: string
-    time: string
-    type: "critical" | "warning" | "info" | "success"
-    read: boolean
+    message: string
+    user_name: string
+    email: string
+    ip_address: string
+    is_read: boolean
+    created_at: string
 }
 
-const INITIAL_NOTIFICATIONS: Notification[] = [
-    {
-        id: 1,
-        title: "Critical Budget Alert",
-        description: "Project 'KSM-24P047' has reached 95% of its budget limit.",
-        time: "10 min ago",
-        type: "critical",
-        read: false,
-    },
-    {
-        id: 2,
-        title: "Material Usage Warning",
-        description: "Usage of 'Pipa Schedule 40' exceeds planned RAP by 15%.",
-        time: "2 hours ago",
-        type: "warning",
-        read: false,
-    },
-    {
-        id: 3,
-        title: "New Addendum Added",
-        description: "Addendum valued at Rp 150,000,000 added to 'KSM-24P047'.",
-        time: "1 day ago",
-        type: "info",
-        read: true,
-    },
-    {
-        id: 4,
-        title: "Project Completed",
-        description: "Project 'KSM-23P001' marked as Completed.",
-        time: "2 days ago",
-        type: "success",
-        read: true,
-    },
-]
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081/api"
+
+function notifIcon(type: string) {
+    switch (type) {
+        case "brute_force": return <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+        case "new_ip_login": return <Shield className="h-5 w-5 text-yellow-500 shrink-0 mt-0.5" />
+        case "password_reset": return <Info className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+        case "access_request": return <Info className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+        default: return <AlertTriangle className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+    }
+}
+
+function borderColor(type: string) {
+    switch (type) {
+        case "brute_force": return "border-l-red-500"
+        case "new_ip_login": return "border-l-yellow-500"
+        case "password_reset": return "border-l-blue-500"
+        case "access_request": return "border-l-amber-500"
+        default: return "border-l-muted-foreground"
+    }
+}
 
 export function NotificationSidebar() {
-    const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS)
+    const { user } = useAuth()
+    const router = useRouter()
+    const [notifications, setNotifications] = useState<Notification[]>([])
+    const [unreadCount, setUnreadCount] = useState(0)
     const [isOpen, setIsOpen] = useState(false)
     const [isMounted, setIsMounted] = useState(false)
+    const esRef = useRef<EventSource | null>(null)
 
-    useEffect(() => {
-        setIsMounted(true)
+    const fetchNotifications = useCallback(async () => {
+        try {
+            const res = await api.get("/admin/notifications")
+            setNotifications(res.data.data.notifications || [])
+            setUnreadCount(res.data.data.unread_count || 0)
+        } catch {
+            // silently fail
+        }
     }, [])
 
-    const unreadCount = notifications.filter((n) => !n.read).length
+    // Load initial + connect SSE — only for admins
+    useEffect(() => {
+        setIsMounted(true)
+        if (!user?.can_access_admin) return
 
-    if (!isMounted) {
-        return null
+        fetchNotifications()
+
+        const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
+        if (!token) return
+
+        const es = new EventSource(`${API_BASE}/admin/notifications/stream?token=${token}`)
+        esRef.current = es
+
+        es.onmessage = (e) => {
+            try {
+                const notif: Notification = JSON.parse(e.data)
+                setNotifications((prev) => [notif, ...prev])
+                setUnreadCount((prev) => prev + 1)
+            } catch {
+                // ignore parse errors
+            }
+        }
+
+        es.onerror = () => {
+            // EventSource auto-reconnects on error
+        }
+
+        return () => {
+            es.close()
+            esRef.current = null
+        }
+    }, [user?.can_access_admin, fetchNotifications])
+
+    const markRead = async (id: string) => {
+        try {
+            await api.post(`/admin/notifications/${id}/read`)
+            setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n))
+            setUnreadCount((prev) => Math.max(0, prev - 1))
+        } catch {
+            // silently fail
+        }
     }
 
-    const markAsRead = (id: number) => {
-        setNotifications(notifications.map(n =>
-            n.id === id ? { ...n, read: true } : n
-        ))
+    const markAllRead = async () => {
+        try {
+            await api.post("/admin/notifications/read-all")
+            setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
+            setUnreadCount(0)
+        } catch {
+            // silently fail
+        }
     }
 
-    const markAllAsRead = () => {
-        setNotifications(notifications.map(n => ({ ...n, read: true })))
-    }
-
-    const deleteNotification = (id: number) => {
-        setNotifications(notifications.filter(n => n.id !== id))
-    }
+    if (!isMounted || !user?.can_access_admin) return null
 
     return (
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -106,72 +142,57 @@ export function NotificationSidebar() {
                         <div className="space-y-1">
                             <SheetTitle className="text-xl">Notifications</SheetTitle>
                             <SheetDescription>
-                                You have {unreadCount} unread messages.
+                                {unreadCount > 0 ? `${unreadCount} unread alert${unreadCount > 1 ? "s" : ""}` : "All caught up"}
                             </SheetDescription>
                         </div>
                         {unreadCount > 0 && (
-                            <Button variant="ghost" size="sm" onClick={markAllAsRead} className="text-xs">
+                            <Button variant="ghost" size="sm" onClick={markAllRead} className="text-xs">
                                 <Check className="mr-2 h-3 w-3" />
                                 Mark all read
                             </Button>
                         )}
                     </div>
                 </SheetHeader>
-                <ScrollArea className="flex-1 p-6">
-                    <div className="space-y-4">
+                <ScrollArea className="flex-1 p-4">
+                    <div className="space-y-3">
                         {notifications.length === 0 ? (
                             <div className="text-center py-12 text-muted-foreground">
-                                <Bell className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                                <p>No notifications yet.</p>
+                                <Bell className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                                <p className="text-sm">No notifications yet</p>
                             </div>
                         ) : (
-                            notifications.map((notification) => (
+                            notifications.map((n) => (
                                 <div
-                                    key={notification.id}
+                                    key={n.id}
                                     className={cn(
-                                        "relative group flex gap-4 p-4 rounded-lg border transition-all hover:bg-muted/50",
-                                        !notification.read ? "bg-muted/30 border-l-4" : "bg-background",
-                                        !notification.read && notification.type === "critical" ? "border-l-red-500" :
-                                            !notification.read && notification.type === "warning" ? "border-l-yellow-500" :
-                                                !notification.read && notification.type === "success" ? "border-l-green-500" :
-                                                    !notification.read ? "border-l-blue-500" : ""
+                                        "flex gap-3 p-4 rounded-lg border cursor-pointer transition-all hover:bg-muted/50",
+                                        !n.is_read ? `bg-muted/30 border-l-4 ${borderColor(n.type)}` : "bg-background"
                                     )}
-                                    onClick={() => markAsRead(notification.id)}
+                                    onClick={() => {
+                                        if (!n.is_read) markRead(n.id)
+                                        if (n.type === "access_request") {
+                                            setIsOpen(false)
+                                            router.push("/admin/users?tab=requests")
+                                        }
+                                    }}
                                 >
-                                    <div className="mt-1">
-                                        {notification.type === "critical" && <AlertCircle className="h-5 w-5 text-red-500" />}
-                                        {notification.type === "warning" && <AlertTriangle className="h-5 w-5 text-yellow-500" />}
-                                        {notification.type === "info" && <Info className="h-5 w-5 text-blue-500" />}
-                                        {notification.type === "success" && <CheckCircle2 className="h-5 w-5 text-green-500" />}
-                                    </div>
-                                    <div className="flex-1 space-y-1 cursor-pointer">
-                                        <div className="flex items-center justify-between">
-                                            <p className={cn("text-sm font-medium leading-none", !notification.read && "font-bold")}>
-                                                {notification.title}
+                                    {notifIcon(n.type)}
+                                    <div className="flex-1 min-w-0 space-y-1">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <p className={cn("text-sm leading-snug", !n.is_read ? "font-semibold" : "font-medium")}>
+                                                {n.title}
                                             </p>
-                                            <span className="text-xs text-muted-foreground">{notification.time}</span>
+                                            <span className="text-xs text-muted-foreground shrink-0">
+                                                {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                                            </span>
                                         </div>
-                                        <p className="text-sm text-muted-foreground line-clamp-2">
-                                            {notification.description}
-                                        </p>
+                                        <p className="text-xs text-muted-foreground line-clamp-2">{n.message}</p>
+                                        {n.ip_address && (
+                                            <p className="text-xs text-muted-foreground font-mono">IP: {n.ip_address}</p>
+                                        )}
                                     </div>
-                                    {/* Action Buttons (Visible on Hover) */}
-                                    <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-background/80 backdrop-blur-sm rounded-md p-1">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20"
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                deleteNotification(notification.id)
-                                            }}
-                                        >
-                                            <Trash2 className="h-3 w-3" />
-                                        </Button>
-                                    </div>
-                                    {/* Unread Indicator */}
-                                    {!notification.read && (
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-primary" />
+                                    {!n.is_read && (
+                                        <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />
                                     )}
                                 </div>
                             ))

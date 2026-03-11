@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"time"
+
 	"sso/internal/repositories"
 	"sso/internal/services"
 	"sso/pkg/response"
+	"sso/pkg/validator"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -15,6 +18,25 @@ type UserHandler struct {
 
 func NewUserHandler(userService *services.UserService, auditRepo *repositories.AuditRepository) *UserHandler {
 	return &UserHandler{userService: userService, auditRepo: auditRepo}
+}
+
+// Create POST /api/users
+func (h *UserHandler) Create(c *fiber.Ctx) error {
+	var input services.CreateUserInput
+	if err := c.BodyParser(&input); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "Invalid request data", nil)
+	}
+
+	if err := validator.ValidatePassword(input.Password); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+	}
+
+	user, err := h.userService.Create(input)
+	if err != nil {
+		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+	}
+
+	return response.Success(c, fiber.StatusCreated, "User created successfully", user)
 }
 
 // GetAll GET /api/users
@@ -203,11 +225,64 @@ func (h *UserHandler) GetMyActivity(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusOK, "Activity retrieved", logs)
 }
 
-// GetLoginStats GET /api/user/login-stats
+// GetLoginStats GET /api/user/login-stats?from=2025-01-01&to=2025-01-07
 func (h *UserHandler) GetLoginStats(c *fiber.Ctx) error {
-	stats, err := h.auditRepo.GetLoginStatsByDay(7)
+	from := c.Query("from")
+	to := c.Query("to")
+
+	// default: 7 hari terakhir
+	if from == "" || to == "" {
+		now := time.Now()
+		to = now.Format("2006-01-02")
+		from = now.AddDate(0, 0, -6).Format("2006-01-02")
+	}
+
+	stats, err := h.auditRepo.GetLoginStatsByRange(from, to)
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, "Failed to fetch login stats", nil)
 	}
 	return response.Success(c, fiber.StatusOK, "Login stats retrieved", stats)
+}
+
+// GetRecentActivity GET /api/admin/activity
+func (h *UserHandler) GetRecentActivity(c *fiber.Ctx) error {
+	logs, err := h.auditRepo.FindRecentWithUsers(10)
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "Failed to fetch activity", nil)
+	}
+	return response.Success(c, fiber.StatusOK, "Recent activity retrieved", logs)
+}
+
+// GetLogs GET /api/admin/logs
+func (h *UserHandler) GetLogs(c *fiber.Ctx) error {
+	filter := repositories.LogFilter{
+		UserID:    c.Query("user_id"),
+		Email:     c.Query("email"),
+		EventType: c.Query("event_type"),
+	}
+
+	if s := c.Query("success"); s == "true" {
+		v := true
+		filter.Success = &v
+	} else if s == "false" {
+		v := false
+		filter.Success = &v
+	}
+
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 20)
+	filter.Page = page
+	filter.Limit = limit
+
+	logs, total, err := h.auditRepo.FindPaginated(filter)
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "Failed to fetch logs", nil)
+	}
+
+	return response.Success(c, fiber.StatusOK, "Logs retrieved", fiber.Map{
+		"logs":  logs,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
 }
